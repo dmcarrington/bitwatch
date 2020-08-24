@@ -26,6 +26,8 @@
 #include "gui.h"
 #include "SPIFFS.h"
 #include "FFat.h"
+#include "Bitcoin.h"
+#include "Hash.h"
 
 
 #define G_EVENT_VBUS_PLUGIN         _BV(0)
@@ -59,10 +61,110 @@ lv_icon_battery_t batState = LV_ICON_CALCULATION;
 unsigned int screenTimeout = DEFAULT_SCREEN_TIMEOUT;
 bool decoy = true;
 bool irq = false;
+bool confirm = false;
 bool walletDone = false;
 
 String sdcommand;
 String savedseed;
+String passkey = "";
+String passhide = "";
+String hashed = "";
+String savedpinhash;
+bool setPin = false;
+
+String pincode = "";
+String obfuscated = "";
+lv_obj_t * label1 = NULL;
+
+static void confirmPin() {
+  bool set = setPin;
+  if (set == true){
+     uint8_t newpasskeyresult[32];
+     sha256(passkey, newpasskeyresult);
+     hashed = toHex(newpasskeyresult,32);
+        
+     fs::File file = FFat.open("/pass.txt", FILE_WRITE);
+     file.print(hashed + "\n");
+     file.close();
+   }
+     
+   fs::File otherfile = FFat.open("/pass.txt");
+   savedpinhash = otherfile.readStringUntil('\n');
+   otherfile.close();
+       
+   uint8_t passkeyresult[32];
+   sha256(passkey, passkeyresult);
+   hashed = toHex(passkeyresult,32);
+   Serial.println(savedpinhash);
+   Serial.println(hashed);
+     
+   if(savedpinhash == hashed || set == true ){
+      Serial.println("PIN ok");
+      //getKeys(savedseed, passkey);
+      passkey = "";
+      passhide = "";
+      confirm = true;
+      return;
+   }
+   else if (savedpinhash != hashed && set == false){
+      ttgo->tft->fillScreen(TFT_BLACK);
+      ttgo->tft->setCursor(0, 110);
+      ttgo->tft->setTextSize(2);
+      ttgo->tft->setTextColor(TFT_RED);
+      ttgo->tft->print("   Reset and try again");
+      passkey = "";
+      passhide = "";
+      delay(3000);
+   }
+   
+  confirm = false;
+}
+
+static void event_handler(lv_obj_t * obj, lv_event_t event)
+{
+    if(event == LV_EVENT_VALUE_CHANGED) {
+        const char * txt = lv_btnmatrix_get_active_btn_text(obj);
+        if(txt == "Clear") {
+          pincode = "";
+          obfuscated = "";
+          lv_label_set_text(label1, obfuscated.c_str());
+        } else if (txt == "Set") {
+          passkey = pincode;          
+          confirm = true;
+          confirmPin();
+        }
+        
+        if(isdigit((int)txt[0])) {
+          pincode = pincode + String(txt);
+          printf("pincode = %s\n", pincode.c_str());
+          obfuscated = obfuscated + "*";
+          
+          
+          lv_label_set_text(label1, obfuscated.c_str());
+        }
+
+        printf("%s was pressed\n", txt);
+    }
+}
+
+
+static const char * btnm_map[] = {"1", "2", "3", "4", "5", "\n",
+                                  "6", "7", "8", "9", "0", "\n",
+                                  "Clear", "Set", ""};
+
+
+void passcode_matrix(void)
+{
+   
+    lv_obj_t * btnm1 = lv_btnmatrix_create(lv_scr_act(), NULL);
+    lv_btnmatrix_set_map(btnm1, btnm_map);
+    lv_btnmatrix_set_btn_width(btnm1, 10, 2);        /*Make "Action1" twice as wide as "Action2"*/
+    lv_obj_align(btnm1, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_event_cb(btnm1, event_handler);
+    label1 = lv_label_create(lv_scr_act(), NULL);
+    lv_label_set_text(label1, pincode.c_str());
+    lv_obj_align(label1, NULL, LV_ALIGN_CENTER, 0, -70);
+}
 
 void setupNetwork()
 {
@@ -130,6 +232,14 @@ void low_energy()
 }
 
 //========================================================================
+void enterpin(bool set){
+
+  confirm = false;
+  setPin = set;
+  passcode_matrix();
+}
+
+//========================================================================
 void filechecker(){
   SPIFFS.open("/bitwatch.txt", FILE_READ);
 
@@ -182,13 +292,13 @@ void startupWallet() {
   }
   else if(sdcommand.substring(0,7) == "RESTORE"){
     //restorefromseed(sdcommand.substring(8,sdcommand.length()));
-    //enterpin(true);
+    enterpin(true);
   }
   else{
-    //enterpin(false);
+    enterpin(false);
   }
-  //M5.Lcd.drawBitmap(0, 0, 320, 240, (uint8_t *)WalletImg_map);
-  ttgo->tft->fillScreen(TFT_BLUE);
+
+  /*ttgo->tft->fillScreen(TFT_BLUE);
   ttgo->tft->drawString("Start wallet here", 25, 100);
   if(haveKey) {
     ttgo->tft->drawString("Key file found!", 25, 120);
@@ -206,7 +316,7 @@ void startupWallet() {
   Serial.println("waiting 30s");
   delay(30000);
   Serial.println("delay finished");
-  walletDone = true;    
+  walletDone = true;    */
 }
 
 
@@ -473,5 +583,9 @@ void loop()
         
         esp_restart();
       }
+
+      lv_task_handler();
+      delay(5);
+      
     }
 }
