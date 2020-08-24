@@ -24,6 +24,9 @@
 #include "esp_wifi.h"
 #include <WiFi.h>
 #include "gui.h"
+#include "SPIFFS.h"
+#include "FFat.h"
+
 
 #define G_EVENT_VBUS_PLUGIN         _BV(0)
 #define G_EVENT_VBUS_REMOVE         _BV(1)
@@ -56,6 +59,10 @@ lv_icon_battery_t batState = LV_ICON_CALCULATION;
 unsigned int screenTimeout = DEFAULT_SCREEN_TIMEOUT;
 bool decoy = true;
 bool irq = false;
+bool walletDone = false;
+
+String sdcommand;
+String savedseed;
 
 void setupNetwork()
 {
@@ -121,6 +128,89 @@ void low_energy()
         screenTimeout = DEFAULT_SCREEN_TIMEOUT;
     }
 }
+
+//========================================================================
+void filechecker(){
+  SPIFFS.open("/bitwatch.txt", FILE_READ);
+
+}
+
+//========================================================================
+void seedmaker(){
+  fs::File keyfile = FFat.open("/key.txt", FILE_WRITE);
+  keyfile.print("test\n");
+  keyfile.close();
+}
+
+//=======================================================================
+
+void startupWallet() {
+  if (!SPIFFS.begin(true)) {
+        Serial.println("An Error has occurred while mounting SPIFFS");
+        return;
+  } 
+      
+  if(!FFat.begin(true)) {
+    Serial.println("An error has occurred while mounting FFAT");
+    return;
+  }
+  
+  bool haveKey = true;
+  bool haveCommand = true;
+  
+  //Checks if the user has an account or is forcing a reset
+  haveKey = FFat.exists("/key.txt");
+  if(haveKey) {
+    fs::File keyfile = FFat.open("/key.txt", FILE_READ);
+    savedseed = keyfile.readStringUntil('\n');
+    keyfile.close();
+  }
+  
+
+  haveCommand = SPIFFS.exists("/bitwatch.txt");
+  if(haveCommand) {
+    fs::File commandfile = SPIFFS.open("/bitwatch.txt", FILE_READ);
+    sdcommand = commandfile.readStringUntil('\n');
+    commandfile.close();
+  }
+  
+  filechecker();
+
+  if(sdcommand == "HARD RESET"){
+    seedmaker();  
+    //pinmaker();
+  }
+  else if(sdcommand.substring(0,7) == "RESTORE"){
+    //restorefromseed(sdcommand.substring(8,sdcommand.length()));
+    //enterpin(true);
+  }
+  else{
+    //enterpin(false);
+  }
+  //M5.Lcd.drawBitmap(0, 0, 320, 240, (uint8_t *)WalletImg_map);
+  ttgo->tft->fillScreen(TFT_BLUE);
+  ttgo->tft->drawString("Start wallet here", 25, 100);
+  if(haveKey) {
+    ttgo->tft->drawString("Key file found!", 25, 120);
+    ttgo->tft->drawString(savedseed, 35, 130);
+  } else {
+    ttgo->tft->drawString("Key file NOT found!", 25, 120);
+  }
+
+  if(haveCommand) {
+    ttgo->tft->drawString("Command file found!", 25, 140);
+    ttgo->tft->drawString(sdcommand, 35, 150);
+  } else {
+    ttgo->tft->drawString("Command file NOT found!", 25, 140);
+  }
+  Serial.println("waiting 30s");
+  delay(30000);
+  Serial.println("delay finished");
+  walletDone = true;    
+}
+
+
+//=======================================================================
 
 void setup()
 {
@@ -227,8 +317,7 @@ void setup()
     
     if(decoy == false){
       // Display wallet
-      ttgo->tft->fillScreen(TFT_BLUE);
-      ttgo->tft->drawString("Start wallet here", 25, 100);
+      startupWallet();
     } else {
 
       //Check if the RTC clock matches, if not, use compile time
@@ -239,7 +328,6 @@ void setup()
   
       //Setting up the network
       setupNetwork();
-
     
 
       //Execute your own GUI interface
@@ -378,6 +466,12 @@ void loop()
           lv_task_handler();
       } else {
           low_energy();
+      }
+    } else {
+      if(walletDone) {
+        Serial.println("Got walletDone, restarting");
+        
+        esp_restart();
       }
     }
 }
