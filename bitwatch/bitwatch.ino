@@ -28,7 +28,7 @@
 #include "FFat.h"
 #include "Bitcoin.h"
 #include "Hash.h"
-
+#include "seedwords.h"
 
 #define G_EVENT_VBUS_PLUGIN         _BV(0)
 #define G_EVENT_VBUS_REMOVE         _BV(1)
@@ -72,10 +72,123 @@ String hashed = "";
 String savedpinhash;
 bool setPin = false;
 
+String privatekey;
+String pubkey;
+
+// PIN generation / entry UI elements
 String pincode = "";
 String obfuscated = "";
 lv_obj_t * label1 = NULL;
 
+int seedCount = 1;
+// UI elements for showing seed words
+lv_obj_t * seedLabel = NULL;
+lv_obj_t * seedBtn = NULL;
+lv_obj_t * btnLabel = NULL;
+lv_obj_t * wordLabel = NULL;
+// String of all generated seed words
+String seedgeneratestr = "";
+// Current seed word for user to write down
+String seedWord = "";
+// Display current seed word index
+String wordCount = " Word 1";
+bool seed_done = false;
+
+void pinmaker();
+
+//========================================================================
+// On each button press, generate the next of 24 seed words.
+// When completed, save to seed file in FFAT and SPIFFS partitions
+//========================================================================
+static void seedmaker_cb(lv_obj_t * obj, lv_event_t event) {
+  if(event == LV_EVENT_CLICKED) {
+    if(seedCount <= 23){
+      seedCount++;
+      seedWord = seedwords[random(0,2047)];
+      lv_label_set_text(seedLabel, seedWord.c_str());
+      seedgeneratestr += " " + seedWord;
+      Serial.println(seedgeneratestr);
+      wordCount = "Word " + String(seedCount);
+      lv_label_set_text(wordLabel, wordCount.c_str());
+    } else {
+      if(seed_done) {
+        lv_obj_del(seedLabel);
+        lv_obj_del(wordLabel);
+        lv_obj_del(seedBtn);
+        pinmaker();
+      } else {
+        fs::File file = FFat.open("/key.txt", FILE_WRITE);
+        file.print(seedgeneratestr.substring(0, seedgeneratestr.length()) + "\n");
+        file.close();
+        
+        file = SPIFFS.open("/bitwatch.txt", FILE_WRITE);
+        file.print(seedgeneratestr);
+        file.close();
+        
+        lv_obj_align(seedLabel, NULL, LV_ALIGN_CENTER, -50, -20);
+        lv_label_set_text(seedLabel, "Key file saved to\ninternal storage");
+        lv_label_set_text(wordLabel, "");
+        lv_label_set_text(btnLabel, "Done");
+        seed_done = true;
+      }
+    }
+  }
+}
+
+//========================================================================
+// Loop over a set of 24 randomly-generated seed words
+//========================================================================
+void seedmaker(){
+  ttgo->tft->fillScreen(TFT_BLACK);
+  ttgo->tft->setCursor(0, 100);
+  ttgo->tft->setTextColor(TFT_GREEN);
+  ttgo->tft->setTextSize(2);
+  ttgo->tft->println("   Write seed words");
+  ttgo->tft->println("   somewhere safe!");
+  delay(6000);
+
+  seedBtn = lv_btn_create(lv_scr_act(), NULL);
+  lv_obj_set_event_cb(seedBtn, seedmaker_cb);      
+  lv_obj_set_size(seedBtn, 200, 40);    
+  lv_obj_align(seedBtn, NULL, LV_ALIGN_CENTER, 0, 90);
+  btnLabel = lv_label_create(seedBtn, NULL);
+  lv_label_set_text(btnLabel, "Next");  
+
+  seedWord = seedwords[random(0,2047)];
+  seedgeneratestr = seedWord;
+  seedLabel = lv_label_create(lv_scr_act(), NULL);
+  lv_obj_align(seedLabel, NULL, LV_ALIGN_CENTER, 0, -20);
+  lv_label_set_text(seedLabel, seedWord.c_str());
+
+  wordLabel = lv_label_create(lv_scr_act(), NULL);
+  lv_obj_align(wordLabel, NULL, LV_ALIGN_CENTER, 0, -60);
+  lv_label_set_text(wordLabel, "Word 1");
+  
+}
+
+//========================================================================
+// Generate wallet keys from mnemonic and password
+//========================================================================
+void getKeys(String mnemonic, String password)
+{
+
+  HDPrivateKey hd(mnemonic, password);
+
+  if(!hd){ // check if it is valid
+    Serial.println("   Invalid xpub");
+    return;
+  }
+  
+  HDPrivateKey account = hd.derive("m/84'/0'/0'/");
+  
+  privatekey = account;
+  
+   pubkey = account.xpub();
+ 
+ 
+}
+
+//========================================================================
 static void confirmPin() {
   bool set = setPin;
   if (set == true){
@@ -100,8 +213,8 @@ static void confirmPin() {
      
    if(savedpinhash == hashed || set == true ){
       Serial.println("PIN ok");
-      //getKeys(savedseed, passkey);
-      passkey = "";
+      getKeys(savedseed, passkey);
+      //passkey = "";
       passhide = "";
       confirm = true;
       return;
@@ -111,7 +224,7 @@ static void confirmPin() {
       ttgo->tft->setCursor(0, 110);
       ttgo->tft->setTextSize(2);
       ttgo->tft->setTextColor(TFT_RED);
-      ttgo->tft->print("   Reset and try again");
+      ttgo->tft->print("Reset and try again");
       passkey = "";
       passhide = "";
       delay(3000);
@@ -155,7 +268,7 @@ static const char * btnm_map[] = {"1", "2", "3", "4", "5", "\n",
 
 void passcode_matrix(void)
 {
-   
+    ttgo->tft->fillScreen(TFT_BLACK);
     lv_obj_t * btnm1 = lv_btnmatrix_create(lv_scr_act(), NULL);
     lv_btnmatrix_set_map(btnm1, btnm_map);
     lv_btnmatrix_set_btn_width(btnm1, 10, 2);        /*Make "Action1" twice as wide as "Action2"*/
@@ -164,6 +277,9 @@ void passcode_matrix(void)
     label1 = lv_label_create(lv_scr_act(), NULL);
     lv_label_set_text(label1, pincode.c_str());
     lv_obj_align(label1, NULL, LV_ALIGN_CENTER, 0, -70);
+    lv_obj_t * title = lv_label_create(lv_scr_act(), NULL);
+    lv_label_set_text(title, "Enter PIN");
+    lv_obj_align(label1, NULL, LV_ALIGN_CENTER, 0, -90);
 }
 
 void setupNetwork()
@@ -240,16 +356,15 @@ void enterpin(bool set){
 }
 
 //========================================================================
-void filechecker(){
-  SPIFFS.open("/bitwatch.txt", FILE_READ);
-
-}
-
-//========================================================================
-void seedmaker(){
-  fs::File keyfile = FFat.open("/key.txt", FILE_WRITE);
-  keyfile.print("test\n");
-  keyfile.close();
+void pinmaker(){
+  ttgo->tft->fillScreen(TFT_BLACK);
+  ttgo->tft->setCursor(0, 90);
+  ttgo->tft->setTextColor(TFT_GREEN);
+  ttgo->tft->println("   Enter pin using");
+  ttgo->tft->println("   keypad,");
+  ttgo->tft->println("   3 letters at least");
+  delay(6000);
+  enterpin(true);
 }
 
 //=======================================================================
@@ -271,8 +386,10 @@ void startupWallet() {
   //Checks if the user has an account or is forcing a reset
   haveKey = FFat.exists("/key.txt");
   if(haveKey) {
+    Serial.println("Key file exists:");
     fs::File keyfile = FFat.open("/key.txt", FILE_READ);
     savedseed = keyfile.readStringUntil('\n');
+    Serial.println(savedseed);
     keyfile.close();
   }
   
@@ -284,7 +401,7 @@ void startupWallet() {
     commandfile.close();
   }
   
-  filechecker();
+  //filechecker();
 
   if(sdcommand == "HARD RESET"){
     seedmaker();  
