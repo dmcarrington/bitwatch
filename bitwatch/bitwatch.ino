@@ -75,6 +75,7 @@ bool setPin = false;
 bool confirmingPin = false;
 lv_obj_t * pinTitle = NULL;
 String repeatPincode = "";
+lv_obj_t * pinPad = NULL;
 
 String privatekey;
 String pubkey;
@@ -99,6 +100,37 @@ String wordCount = " Word 1";
 bool seed_done = false;
 
 void pinmaker();
+
+static void menu_event_handler(lv_obj_t * obj, lv_event_t event)
+{
+  if(event == LV_EVENT_CLICKED)
+  {
+    const char * txt = lv_btnmatrix_get_active_btn_text(obj);   
+    Serial.println(strcat("Pressed ", txt));
+    if(txt == "Restart") {
+      esp_restart();
+    }
+  }
+}
+
+static const char * menu_map[] = {"Display Pubkey", "\n",
+                                    "Sign Transaction", "\n",
+                                    "Export ZPUB", "\n",
+                                    "Show Seed", "\n",
+                                    "Wipe Device", "\n",
+                                    "Restore From Seed", "\n",
+                                    "Restart", ""};
+
+void menu_matrix(void)
+{
+    ttgo->tft->fillScreen(TFT_BLACK);
+    lv_obj_t * btnm1 = lv_btnmatrix_create(lv_scr_act(), NULL);
+    lv_btnmatrix_set_map(btnm1, menu_map);
+    lv_obj_set_size(btnm1, 240, 240);
+    //lv_btnmatrix_set_btn_width(btnm1, 10, 2);        /*Make "Action1" twice as wide as "Action2"*/
+    lv_obj_align(btnm1, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_event_cb(btnm1, menu_event_handler);
+}
 
 //========================================================================
 // On each button press, generate the next of 24 seed words.
@@ -224,6 +256,10 @@ static void confirmPin() {
       ttgo->tft->setTextColor(TFT_GREEN);
       ttgo->tft->print("Wallet setup!");
       delay(3000);
+      lv_obj_del(pinPad);
+      lv_obj_del(pinTitle);
+      lv_obj_del(label1);
+      menu_matrix();
       return;
    }
    else if (savedpinhash != hashed && set == false){
@@ -232,7 +268,7 @@ static void confirmPin() {
       ttgo->tft->setTextSize(2);
       ttgo->tft->setTextColor(TFT_RED);
       ttgo->tft->print("Reset and try again");
-      passkey = "";
+      pincode = "";
       passhide = "";
       delay(3000);
    }
@@ -280,6 +316,7 @@ static void pin_event_handler(lv_obj_t * obj, lv_event_t event)
               lv_label_set_text(label1, obfuscated.c_str());
               lv_label_set_text(pinTitle, "Confirm PIN");
             } else {
+              passkey = pincode;
               confirmPin();
             }
           }
@@ -311,11 +348,11 @@ static const char * btnm_map[] = {"1", "2", "3", "4", "5", "\n",
 void passcode_matrix(void)
 {
     ttgo->tft->fillScreen(TFT_BLACK);
-    lv_obj_t * btnm1 = lv_btnmatrix_create(lv_scr_act(), NULL);
-    lv_btnmatrix_set_map(btnm1, btnm_map);
-    lv_btnmatrix_set_btn_width(btnm1, 10, 2);        /*Make "Action1" twice as wide as "Action2"*/
-    lv_obj_align(btnm1, NULL, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_event_cb(btnm1, pin_event_handler);
+    pinPad = lv_btnmatrix_create(lv_scr_act(), NULL);
+    lv_btnmatrix_set_map(pinPad, btnm_map);
+    lv_btnmatrix_set_btn_width(pinPad, 10, 2);        /*Make "Action1" twice as wide as "Action2"*/
+    lv_obj_align(pinPad, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_event_cb(pinPad, pin_event_handler);
     label1 = lv_label_create(lv_scr_act(), NULL);
     lv_label_set_text(label1, pincode.c_str());
     lv_obj_align(label1, NULL, LV_ALIGN_CENTER, 0, -70);
