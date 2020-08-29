@@ -105,11 +105,31 @@ static void menu_event_handler(lv_obj_t * obj, lv_event_t event)
 {
   if(event == LV_EVENT_CLICKED)
   {
-    const char * txt = lv_btnmatrix_get_active_btn_text(obj);   
-    Serial.println(strcat("Pressed ", txt));
-    if(txt == "Restart") {
-      esp_restart();
-    }
+    unsigned int btn_index = lv_btnmatrix_get_active_btn(obj);
+    switch(btn_index){
+      case(0):
+        Serial.println("Display pubkey");
+        break;
+      case(1): 
+        Serial.println("Sign transaction");
+        break;
+      case(2):
+        Serial.println("Export ZPUB");
+        break;
+      case(3):
+        Serial.println("Show Seed");
+        break;
+      case(4):
+        Serial.println("Wipe Device");
+        break;
+      case(5):
+        Serial.println("Restore from seed");
+        break;
+      case(6):
+        Serial.println("Restart");
+        esp_restart();
+        break;
+    }    
   }
 }
 
@@ -342,7 +362,7 @@ static void pin_event_handler(lv_obj_t * obj, lv_event_t event)
 
 static const char * btnm_map[] = {"1", "2", "3", "4", "5", "\n",
                                   "6", "7", "8", "9", "0", "\n",
-                                  "Clear", "Set", ""};
+                                  "Clear", "OK", ""};
 
 //========================================================================
 void passcode_matrix(void)
