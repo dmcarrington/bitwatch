@@ -301,7 +301,9 @@ static void pin_event_handler(lv_obj_t * obj, lv_event_t event)
 {
     if(event == LV_EVENT_VALUE_CHANGED) {
         const char * txt = lv_btnmatrix_get_active_btn_text(obj);
-        if(txt == "Clear") {
+        unsigned int btn_index = lv_btnmatrix_get_active_btn(obj);
+        if(btn_index == 10) {
+          // Clearn button pressed
           if(confirmingPin) {
             repeatPincode = "";
           } else {
@@ -309,7 +311,7 @@ static void pin_event_handler(lv_obj_t * obj, lv_event_t event)
           }
           obfuscated = "";
           lv_label_set_text(label1, obfuscated.c_str());
-        } else if (txt == "Set") {
+        } else if (btn_index == 11) {
           if(confirmingPin){
             if(repeatPincode == pincode) {
               // pincode confirmed successfully, set it
@@ -341,9 +343,8 @@ static void pin_event_handler(lv_obj_t * obj, lv_event_t event)
             }
           }
           
-        }
-        
-        if(isdigit((int)txt[0])) {
+        } else {
+          // Number button 0-9
           if(confirmingPin) {
             repeatPincode = repeatPincode + String(txt);
           } else {
