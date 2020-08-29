@@ -71,6 +71,10 @@ String passhide = "";
 String hashed = "";
 String savedpinhash;
 bool setPin = false;
+//bool pinConfirmed = false;
+bool confirmingPin = false;
+lv_obj_t * pinTitle = NULL;
+String repeatPincode = "";
 
 String privatekey;
 String pubkey;
@@ -171,7 +175,6 @@ void seedmaker(){
 //========================================================================
 void getKeys(String mnemonic, String password)
 {
-
   HDPrivateKey hd(mnemonic, password);
 
   if(!hd){ // check if it is valid
@@ -183,9 +186,7 @@ void getKeys(String mnemonic, String password)
   
   privatekey = account;
   
-   pubkey = account.xpub();
- 
- 
+  pubkey = account.xpub();
 }
 
 //========================================================================
@@ -217,6 +218,12 @@ static void confirmPin() {
       //passkey = "";
       passhide = "";
       confirm = true;
+      ttgo->tft->fillScreen(TFT_BLACK);
+      ttgo->tft->setCursor(0, 110);
+      ttgo->tft->setTextSize(2);
+      ttgo->tft->setTextColor(TFT_GREEN);
+      ttgo->tft->print("Wallet setup!");
+      delay(3000);
       return;
    }
    else if (savedpinhash != hashed && set == false){
@@ -233,26 +240,61 @@ static void confirmPin() {
   confirm = false;
 }
 
-static void event_handler(lv_obj_t * obj, lv_event_t event)
+//========================================================================
+static void pin_event_handler(lv_obj_t * obj, lv_event_t event)
 {
     if(event == LV_EVENT_VALUE_CHANGED) {
         const char * txt = lv_btnmatrix_get_active_btn_text(obj);
         if(txt == "Clear") {
-          pincode = "";
+          if(confirmingPin) {
+            repeatPincode = "";
+          } else {
+            pincode = "";
+          }
           obfuscated = "";
           lv_label_set_text(label1, obfuscated.c_str());
         } else if (txt == "Set") {
-          passkey = pincode;          
-          confirm = true;
-          confirmPin();
+          if(confirmingPin){
+            if(repeatPincode == pincode) {
+              // pincode confirmed successfully, set it
+              passkey = pincode;          
+              confirm = true;
+              confirmPin();
+            } else {
+              // pin did not match, start over
+              ttgo->tft->fillScreen(TFT_BLACK);
+              ttgo->tft->setCursor(0, 110);
+              ttgo->tft->setTextSize(2);
+              ttgo->tft->setTextColor(TFT_RED);
+              ttgo->tft->print("Try again");
+              pincode = "";
+              passhide = "";
+              obfuscated = "";
+              confirmingPin = false;
+              delay(3000);
+            }
+          } else {
+            if(setPin) {
+              confirmingPin = true;
+              obfuscated = "";
+              lv_label_set_text(label1, obfuscated.c_str());
+              lv_label_set_text(pinTitle, "Confirm PIN");
+            } else {
+              confirmPin();
+            }
+          }
+          
         }
         
         if(isdigit((int)txt[0])) {
-          pincode = pincode + String(txt);
-          printf("pincode = %s\n", pincode.c_str());
+          if(confirmingPin) {
+            repeatPincode = repeatPincode + String(txt);
+          } else {
+            pincode = pincode + String(txt);
+            printf("pincode = %s\n", pincode.c_str());
+          }
+          
           obfuscated = obfuscated + "*";
-          
-          
           lv_label_set_text(label1, obfuscated.c_str());
         }
 
@@ -265,7 +307,7 @@ static const char * btnm_map[] = {"1", "2", "3", "4", "5", "\n",
                                   "6", "7", "8", "9", "0", "\n",
                                   "Clear", "Set", ""};
 
-
+//========================================================================
 void passcode_matrix(void)
 {
     ttgo->tft->fillScreen(TFT_BLACK);
@@ -273,12 +315,12 @@ void passcode_matrix(void)
     lv_btnmatrix_set_map(btnm1, btnm_map);
     lv_btnmatrix_set_btn_width(btnm1, 10, 2);        /*Make "Action1" twice as wide as "Action2"*/
     lv_obj_align(btnm1, NULL, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_event_cb(btnm1, event_handler);
+    lv_obj_set_event_cb(btnm1, pin_event_handler);
     label1 = lv_label_create(lv_scr_act(), NULL);
     lv_label_set_text(label1, pincode.c_str());
     lv_obj_align(label1, NULL, LV_ALIGN_CENTER, 0, -70);
-    lv_obj_t * title = lv_label_create(lv_scr_act(), NULL);
-    lv_label_set_text(title, "Enter PIN");
+    pinTitle = lv_label_create(lv_scr_act(), NULL);
+    lv_label_set_text(pinTitle, "Enter PIN");
     lv_obj_align(label1, NULL, LV_ALIGN_CENTER, 0, -90);
 }
 
@@ -398,6 +440,7 @@ void startupWallet() {
   if(haveCommand) {
     fs::File commandfile = SPIFFS.open("/bitwatch.txt", FILE_READ);
     sdcommand = commandfile.readStringUntil('\n');
+    Serial.println(sdcommand);
     commandfile.close();
   }
   
