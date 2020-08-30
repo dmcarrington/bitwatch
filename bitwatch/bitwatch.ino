@@ -23,6 +23,7 @@
 #include <soc/rtc.h>
 #include "esp_wifi.h"
 #include <WiFi.h>
+#include <Electrum.h>
 #include "qrcode.h"
 #include "gui.h"
 #include "SPIFFS.h"
@@ -100,6 +101,10 @@ String seedWord = "";
 String wordCount = " Word 1";
 bool seed_done = false;
 
+lv_obj_t * txinfo = NULL;
+lv_obj_t * signTxBtns = NULL;
+ElectrumTx tx;
+
 void pinmaker();
 
 //========================================================================
@@ -141,6 +146,46 @@ void showAddress(String XXX){
 }
 
 //========================================================================
+// Show seed words
+//========================================================================
+void showseed() {
+  ttgo->tft->fillScreen(TFT_BLACK);
+  ttgo->tft->setCursor(0, 20);
+  ttgo->tft->setTextSize(3);
+  ttgo->tft->setTextColor(TFT_GREEN);
+  ttgo->tft->println("  SHOW SEED");
+  ttgo->tft->println("");
+  ttgo->tft->setTextColor(TFT_BLUE);
+  ttgo->tft->setTextSize(2);
+  ttgo->tft->println(savedseed);
+  delay(10000);
+}
+
+//========================================================================
+// Show ZPUB as QR code and export to SPIFFS
+//========================================================================
+void exportZpub() {
+  int str_len = pubkey.length() + 1; 
+  char char_array[str_len];
+  pubkey.toCharArray(char_array, str_len);
+  fs::File file = SPIFFS.open("/bitwatch.txt", FILE_WRITE);
+  file.print(char_array);
+  file.close();
+
+  ttgo->tft->fillScreen(TFT_BLACK);
+  showAddress(pubkey);
+  ttgo->tft->setTextColor(TFT_BLACK);
+  ttgo->tft->setCursor(0, 0);
+  ttgo->tft->setTextSize(3);
+  ttgo->tft->println(" EXPORT ZPUB");
+  
+  ttgo->tft->setTextSize(2);
+  ttgo->tft->setCursor(0, 220);
+  ttgo->tft->println(" Saved to SPIFFS");
+  delay(5000);
+}
+
+//========================================================================
 // Display public key as QR code and text
 //========================================================================
 void displayPubkey() {
@@ -177,6 +222,98 @@ void displayPubkey() {
 }
 
 //========================================================================
+// Repond to confirming a transaction, or cancel signing
+//========================================================================
+static void sign_tx_event_handler(lv_obj_t * obj, lv_event_t event)
+{
+  if(event == LV_EVENT_CLICKED)
+  {
+    unsigned int btn_index = lv_btnmatrix_get_active_btn(obj);
+    if(btn_index == 0) {
+      // "sign" button pressed
+      lv_obj_del(txinfo);
+      lv_obj_del(signTxBtns);
+
+      HDPrivateKey hd(savedseed, passkey);
+      HDPrivateKey account = hd.derive("m/84'/0'/0'/");
+      Serial.println(account);
+      
+      tx.sign(account); 
+      ttgo->tft->fillScreen(TFT_BLACK);
+      ttgo->tft->setCursor(0, 20);
+      ttgo->tft->setTextSize(2);
+      
+      String signedtx = tx;
+      Serial.print(signedtx);
+      int str_len = signedtx.length() + 1; 
+      char char_array[str_len];
+      signedtx.toCharArray(char_array, str_len);
+      fs::File file = SPIFFS.open("/bitwatch.txt", FILE_WRITE);
+      file.print(char_array);
+      file.close();
+
+      ttgo->tft->fillScreen(TFT_BLACK);
+      ttgo->tft->setCursor(0, 100);
+      ttgo->tft->setTextSize(2);
+      ttgo->tft->println(" Saved to SPIFFS");
+      ttgo->tft->println("");
+
+      delay(3000);
+        
+    } else if(btn_index == 1) {
+      // "cancel button pressed
+      lv_obj_del(txinfo);
+      lv_obj_del(signTxBtns);
+      
+    }
+  }
+}
+
+static const char * sign_tx_map[] = {"Sign", "Cancel"};
+
+//========================================================================
+// Submenu for signing a transaction
+//========================================================================
+void signTransaction() {
+  if (sdcommand.substring(0, 4) == "SIGN"){
+    String eltx = sdcommand.substring(5, sdcommand.length() + 1);
+
+    
+
+    ttgo->tft->fillScreen(TFT_BLACK);
+    ttgo->tft->setCursor(0, 20);
+    ttgo->tft->setTextSize(3);
+    ttgo->tft->setTextColor(TFT_GREEN);
+    ttgo->tft->println("");
+    ttgo->tft->setCursor(0, 90);
+    ttgo->tft->println("  Bwahahahaha!");
+    ttgo->tft->println("");
+    ttgo->tft->println("  Transaction");
+    ttgo->tft->println("  found");
+  
+    delay(3000);
+
+    String txnLabel = "";
+    for(int i=0; i < tx.tx.outputsNumber; i++){
+      txnLabel =  txnLabel + (tx.tx.txOuts[i].address()) + "\n-> ";
+      // Serial can't print uint64_t, so convert to int
+      txnLabel = txnLabel + (int(tx.tx.txOuts[i].amount));
+      txnLabel = txnLabel + " sat\n";
+    }
+    txinfo = lv_label_create(lv_scr_act(), NULL);
+    lv_obj_align(txinfo, NULL, LV_ALIGN_CENTER, 0, -100);
+    lv_label_set_text(txinfo, txnLabel.c_str());
+
+    ttgo->tft->fillScreen(TFT_BLACK);
+    signTxBtns = lv_btnmatrix_create(lv_scr_act(), NULL);
+    lv_btnmatrix_set_map(signTxBtns, sign_tx_map);
+    lv_obj_set_size(signTxBtns, 240, 40);
+    lv_obj_align(signTxBtns, NULL, LV_ALIGN_CENTER, 0, -100);
+    lv_obj_set_event_cb(signTxBtns, sign_tx_event_handler);
+  }
+}
+
+//========================================================================
 // Handle menu button array presses
 //========================================================================
 static void menu_event_handler(lv_obj_t * obj, lv_event_t event)
@@ -194,9 +331,11 @@ static void menu_event_handler(lv_obj_t * obj, lv_event_t event)
         break;
       case(2):
         Serial.println("Export ZPUB");
+        exportZpub();
         break;
       case(3):
         Serial.println("Show Seed");
+        showseed();
         break;
       case(4):
         Serial.println("Wipe Device");
@@ -226,7 +365,6 @@ void menu_matrix(void)
     lv_obj_t * btnm1 = lv_btnmatrix_create(lv_scr_act(), NULL);
     lv_btnmatrix_set_map(btnm1, menu_map);
     lv_obj_set_size(btnm1, 240, 240);
-    //lv_btnmatrix_set_btn_width(btnm1, 10, 2);        /*Make "Action1" twice as wide as "Action2"*/
     lv_obj_align(btnm1, NULL, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_event_cb(btnm1, menu_event_handler);
 }
