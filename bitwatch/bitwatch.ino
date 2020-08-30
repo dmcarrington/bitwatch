@@ -105,6 +105,14 @@ lv_obj_t * txinfo = NULL;
 lv_obj_t * signTxBtns = NULL;
 ElectrumTx tx;
 
+lv_obj_t * resetBtns = NULL;
+lv_obj_t * resetInfo = NULL;
+lv_obj_t * main_menu = NULL;
+
+lv_obj_t * restoreInfo = NULL;
+lv_obj_t * restoreBtns = NULL;
+String theSeed = "";
+
 void pinmaker();
 
 //========================================================================
@@ -305,12 +313,125 @@ void signTransaction() {
     lv_obj_align(txinfo, NULL, LV_ALIGN_CENTER, 0, -100);
     lv_label_set_text(txinfo, txnLabel.c_str());
 
-    ttgo->tft->fillScreen(TFT_BLACK);
     signTxBtns = lv_btnmatrix_create(lv_scr_act(), NULL);
     lv_btnmatrix_set_map(signTxBtns, sign_tx_map);
     lv_obj_set_size(signTxBtns, 240, 40);
     lv_obj_align(signTxBtns, NULL, LV_ALIGN_CENTER, 0, -100);
     lv_obj_set_event_cb(signTxBtns, sign_tx_event_handler);
+  }
+}
+
+//========================================================================
+// handle reset confirmation
+//========================================================================
+static void reset_btn_event_handler(lv_obj_t * obj, lv_event_t event)
+{
+  if(event == LV_EVENT_CLICKED)
+  {
+    unsigned int btn_index = lv_btnmatrix_get_active_btn(obj);
+    if(btn_index == 0) {
+      Serial.println("Reset confirmed");
+      // confirm reset
+      lv_obj_del(resetBtns);
+      lv_obj_del(resetInfo);
+      lv_obj_set_pos(main_menu, 0, 0);
+      seedmaker();
+    } else if(btn_index == 1) {
+      Serial.println("reset cancelled");
+      // cancel reset
+      lv_obj_del(resetBtns);
+      lv_obj_del(resetInfo);
+      lv_obj_set_pos(main_menu, 0, 0);
+    }
+  }
+}  
+
+static const char * reset_btn_map[] = {"Reset", "Cancel", ""};
+
+//========================================================================
+// Display reset confirmation
+//========================================================================
+void confirmReset() {
+  lv_obj_set_pos(main_menu, -500, 0);
+  resetInfo = lv_label_create(lv_scr_act(), NULL);
+  lv_obj_align(resetInfo, NULL, LV_ALIGN_CENTER, -30, -60);
+  lv_label_set_text(resetInfo, "Device will be reset,\nare you sure?");
+
+  resetBtns = lv_btnmatrix_create(lv_scr_act(), NULL);
+  lv_btnmatrix_set_map(resetBtns, reset_btn_map);
+  lv_obj_set_size(resetBtns, 240, 40);
+  lv_obj_align(resetBtns, NULL, LV_ALIGN_CENTER, 0, 100);
+  lv_obj_set_event_cb(resetBtns, reset_btn_event_handler); 
+}
+
+//========================================================================
+// handle restore confirmation
+//========================================================================
+static void restore_btn_event_handler(lv_obj_t * obj, lv_event_t event)
+{
+  if(event == LV_EVENT_CLICKED)
+  {
+    unsigned int btn_index = lv_btnmatrix_get_active_btn(obj);
+    if(btn_index == 0) {
+      Serial.println("restore confirmed");
+      // confirm reset
+      lv_obj_del(restoreBtns);
+      lv_obj_del(restoreInfo);
+      ttgo->tft->fillScreen(TFT_BLACK);
+      ttgo->tft->setCursor(0, 100);
+      ttgo->tft->setTextColor(TFT_GREEN);
+      ttgo->tft->setTextSize(2);
+      ttgo->tft->println("  Saving seed...");
+      delay(2000);
+      fs::File file = FFat.open("/key.txt", FILE_WRITE);
+      file.print(theSeed + "\n");
+      file.close();
+      fs::File outfile = SPIFFS.open("/bitwatch.txt", FILE_WRITE);
+      outfile.print("");
+      outfile.close();
+      lv_obj_set_pos(main_menu, 0, 0);
+    } else if(btn_index == 1) {
+      Serial.println("restore cancelled");
+      // cancel reset
+      lv_obj_del(restoreBtns);
+      lv_obj_del(restoreInfo);
+      lv_obj_set_pos(main_menu, 0, 0);
+    }
+  }
+}
+
+static const char * restore_btn_map[] = {"Restore", "Cancel", ""};
+
+//========================================================================
+// Sub menu to confirm restore
+//========================================================================
+void confirmRestoreFromSeed() {
+  lv_obj_set_pos(main_menu, -500, 0);
+  restoreInfo = lv_label_create(lv_scr_act(), NULL);
+  lv_obj_align(restoreInfo, NULL, LV_ALIGN_CENTER, -60, -60);
+  lv_label_set_text(restoreInfo, "Device will be wiped\nthen restored from seed,\nare you sure?");
+
+  restoreBtns = lv_btnmatrix_create(lv_scr_act(), NULL);
+  lv_btnmatrix_set_map(restoreBtns, reset_btn_map);
+  lv_obj_set_size(restoreBtns, 240, 40);
+  lv_obj_align(restoreBtns, NULL, LV_ALIGN_CENTER, 0, 100);
+  lv_obj_set_event_cb(restoreBtns, restore_btn_event_handler); 
+}
+
+//========================================================================
+// attempt to restore from phrase stored in SPIFFS
+//========================================================================
+void restoreFromSeed() {
+  if(sdcommand.substring(0,7) == "RESTORE"){
+    theSeed = sdcommand.substring(8,sdcommand.length());
+    confirmRestoreFromSeed();
+  } else {
+    ttgo->tft->fillScreen(TFT_BLACK);
+    ttgo->tft->setTextSize(2);
+    ttgo->tft->setCursor(0, 90);
+    ttgo->tft->setTextColor(TFT_RED);
+    ttgo->tft->println("'RESTORE *seed phrase*' not found on SPIFFS");
+    delay(3000);
   }
 }
 
@@ -340,9 +461,11 @@ static void menu_event_handler(lv_obj_t * obj, lv_event_t event)
         break;
       case(4):
         Serial.println("Wipe Device");
+        confirmReset();
         break;
       case(5):
         Serial.println("Restore from seed");
+        restoreFromSeed();
         break;
       case(6):
         Serial.println("Restart");
@@ -363,11 +486,11 @@ static const char * menu_map[] = {"Display Pubkey", "\n",
 void menu_matrix(void)
 {
     ttgo->tft->fillScreen(TFT_BLACK);
-    lv_obj_t * btnm1 = lv_btnmatrix_create(lv_scr_act(), NULL);
-    lv_btnmatrix_set_map(btnm1, menu_map);
-    lv_obj_set_size(btnm1, 240, 240);
-    lv_obj_align(btnm1, NULL, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_event_cb(btnm1, menu_event_handler);
+    main_menu = lv_btnmatrix_create(lv_scr_act(), NULL);
+    lv_btnmatrix_set_map(main_menu, menu_map);
+    lv_obj_set_size(main_menu, 240, 240);
+    lv_obj_align(main_menu, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_event_cb(main_menu, menu_event_handler);
 }
 
 //========================================================================
