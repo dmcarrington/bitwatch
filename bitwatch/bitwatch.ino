@@ -23,6 +23,7 @@
 #include <soc/rtc.h>
 #include "esp_wifi.h"
 #include <WiFi.h>
+#include "qrcode.h"
 #include "gui.h"
 #include "SPIFFS.h"
 #include "FFat.h"
@@ -101,6 +102,83 @@ bool seed_done = false;
 
 void pinmaker();
 
+//========================================================================
+// Show an address as a QR code
+//========================================================================
+void showAddress(String XXX){
+  ttgo->tft->fillScreen(TFT_WHITE);
+  XXX.toUpperCase();
+ const char* addr = XXX.c_str();
+ Serial.println(addr);
+  int qrSize = 12;
+  int sizes[17] = { 14, 26, 42, 62, 84, 106, 122, 152, 180, 213, 251, 287, 331, 362, 412, 480, 504 };
+  int len = String(addr).length();
+  for(int i=0; i<17; i++){
+    if(sizes[i] > len){
+      qrSize = i+1;
+      break;
+    }
+  }
+  QRCode qrcode;
+  uint8_t qrcodeData[qrcode_getBufferSize(qrSize)];
+  qrcode_initText(&qrcode, qrcodeData, qrSize-1, ECC_LOW, addr);
+  Serial.println(qrSize -1);
+ 
+  float scale = 4;
+  int offset_x = 0;
+  int offset_y = 50;
+
+  for (uint8_t y = 0; y < qrcode.size; y++) {
+    for (uint8_t x = 0; x < qrcode.size; x++) {
+      if(qrcode_getModule(&qrcode, x, y)){       
+        ttgo->tft->fillRect(offset_x + 15+2+scale*x, offset_y + 2+scale*y, scale, scale, TFT_BLACK);
+      }
+      else{
+        ttgo->tft->fillRect(offset_x + 15+2+scale*x, offset_y + 2+scale*y, scale, scale, TFT_WHITE);
+      }
+    }
+  }
+}
+
+//========================================================================
+// Display public key as QR code and text
+//========================================================================
+void displayPubkey() {
+  HDPublicKey hd(pubkey);
+  String pubnumn = "0";
+  if(SPIFFS.exists("/num.txt")) {
+    fs::File numFile = SPIFFS.open("/num.txt");
+    pubnumn = numFile.readStringUntil('\n');
+    Serial.println(pubnumn);
+    numFile.close();
+  }
+    
+  int pubnum = pubnumn.toInt() + 1;
+  fs::File file = SPIFFS.open("/num.txt", FILE_WRITE);
+  file.print(pubnum);
+  file.close();
+
+  String path = String("m/0/") + pubnum;
+  ttgo->tft->fillScreen(TFT_BLACK);
+  
+  String freshpub = hd.derive(path).address();
+  showAddress(freshpub);
+  ttgo->tft->setCursor(0, 20);
+  ttgo->tft->setTextSize(2);
+  ttgo->tft->setTextColor(TFT_BLACK);
+  ttgo->tft->println("      PUBKEY");
+  int i = 0;
+  while (i < freshpub.length() + 1){
+    ttgo->tft->println("           " + freshpub.substring(i, i + 8));
+    i = i + 8;
+  }
+  ttgo->tft->setCursor(0, 220);
+  delay(10000);
+}
+
+//========================================================================
+// Handle menu button array presses
+//========================================================================
 static void menu_event_handler(lv_obj_t * obj, lv_event_t event)
 {
   if(event == LV_EVENT_CLICKED)
@@ -109,6 +187,7 @@ static void menu_event_handler(lv_obj_t * obj, lv_event_t event)
     switch(btn_index){
       case(0):
         Serial.println("Display pubkey");
+        displayPubkey();
         break;
       case(1): 
         Serial.println("Sign transaction");
