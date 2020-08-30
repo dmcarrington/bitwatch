@@ -212,12 +212,13 @@ void displayPubkey() {
   ttgo->tft->setTextSize(2);
   ttgo->tft->setTextColor(TFT_BLACK);
   ttgo->tft->println("      PUBKEY");
+  ttgo->tft->setCursor(0, 180);
   int i = 0;
   while (i < freshpub.length() + 1){
-    ttgo->tft->println("           " + freshpub.substring(i, i + 8));
-    i = i + 8;
+    ttgo->tft->println(freshpub.substring(i, i + 20));
+    i = i + 20;
   }
-  ttgo->tft->setCursor(0, 220);
+
   delay(10000);
 }
 
