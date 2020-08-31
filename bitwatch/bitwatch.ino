@@ -1204,12 +1204,12 @@ void loop()
                 String bitwatch = file.readStringUntil('\n');
                 client.println(bitwatch);
                 file.close();
+                client.stop();
               }
             }
           }
         }
         // close the connection:
-        client.stop();
         Serial.println("Client Disconnected.");
       }
 
