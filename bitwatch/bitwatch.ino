@@ -74,7 +74,6 @@ lv_icon_battery_t batState = LV_ICON_CALCULATION;
 unsigned int screenTimeout = DEFAULT_SCREEN_TIMEOUT;
 bool decoy = true;
 bool irq = false;
-bool confirm = false;
 bool walletDone = false;
 
 String sdcommand;
@@ -84,7 +83,6 @@ String passhide = "";
 String hashed = "";
 String savedpinhash;
 bool setPin = false;
-//bool pinConfirmed = false;
 bool confirmingPin = false;
 lv_obj_t * pinTitle = NULL;
 String repeatPincode = "";
@@ -220,8 +218,8 @@ void exportZpub() {
   ttgo->tft->setTextSize(2);
   ttgo->tft->println(" EXPORT ZPUB");
   
-  ttgo->tft->setTextSize(2);
-  ttgo->tft->setCursor(0, 200);
+  ttgo->tft->setTextSize(1);
+  ttgo->tft->setCursor(0, 220);
   String msg = "Saved to \n" + ipaddress + "/bitwatch.txt";
   ttgo->tft->println(msg.c_str());
   delay(5000);
@@ -314,7 +312,7 @@ static void sign_tx_event_handler(lv_obj_t * obj, lv_event_t event)
   }
 }
 
-static const char * sign_tx_map[] = {"Sign", "Cancel"};
+static const char * sign_tx_map[] = {"Sign", "Cancel", ""};
 
 //========================================================================
 // Submenu for signing a transaction
@@ -322,8 +320,6 @@ static const char * sign_tx_map[] = {"Sign", "Cancel"};
 void signTransaction() {
   if (sdcommand.substring(0, 4) == "SIGN"){
     String eltx = sdcommand.substring(5, sdcommand.length() + 1);
-
-    
 
     ttgo->tft->fillScreen(TFT_BLACK);
     ttgo->tft->setCursor(0, 20);
@@ -486,6 +482,7 @@ static void menu_event_handler(lv_obj_t * obj, lv_event_t event)
         break;
       case(1): 
         Serial.println("Sign transaction");
+        signTransaction();
         break;
       case(2):
         Serial.println("Export ZPUB");
@@ -519,6 +516,9 @@ static const char * menu_map[] = {"Display Pubkey", "\n",
                                     "Restore From Seed", "\n",
                                     "Restart", ""};
 
+//========================================================================
+// Main menu for wallet
+//========================================================================
 void menu_matrix(void)
 {
     ttgo->tft->fillScreen(TFT_BLACK);
@@ -646,12 +646,11 @@ static void confirmPin() {
       getKeys(savedseed, passkey);
       //passkey = "";
       passhide = "";
-      confirm = true;
       ttgo->tft->fillScreen(TFT_BLACK);
       ttgo->tft->setCursor(0, 110);
       ttgo->tft->setTextSize(2);
       ttgo->tft->setTextColor(TFT_GREEN);
-      ttgo->tft->print("Wallet setup!");
+      ttgo->tft->print(" Wallet Loaded!");
       startWebserver();
       delay(3000);
       lv_obj_del(pinPad);
@@ -668,10 +667,9 @@ static void confirmPin() {
       ttgo->tft->print("Reset and try again");
       pincode = "";
       passhide = "";
+      obfuscated = "";
       delay(3000);
    }
-   
-  confirm = false;
 }
 
 //========================================================================
@@ -694,7 +692,6 @@ static void pin_event_handler(lv_obj_t * obj, lv_event_t event)
             if(repeatPincode == pincode) {
               // pincode confirmed successfully, set it
               passkey = pincode;          
-              confirm = true;
               confirmPin();
             } else {
               // pin did not match, start over
@@ -827,8 +824,6 @@ void low_energy()
 
 //========================================================================
 void enterpin(bool set){
-
-  confirm = false;
   setPin = set;
   passcode_matrix();
 }
@@ -838,9 +833,8 @@ void pinmaker(){
   ttgo->tft->fillScreen(TFT_BLACK);
   ttgo->tft->setCursor(0, 90);
   ttgo->tft->setTextColor(TFT_GREEN);
-  ttgo->tft->println("   Enter pin using");
-  ttgo->tft->println("   keypad,");
-  ttgo->tft->println("   3 letters at least");
+  ttgo->tft->println("  Enter pin using");
+  ttgo->tft->println("  keypad,");
   delay(6000);
   enterpin(true);
 }
@@ -879,40 +873,17 @@ void startupWallet() {
     Serial.println(sdcommand);
     commandfile.close();
   }
-  
-  //filechecker();
 
   if(sdcommand == "HARD RESET"){
     seedmaker();  
-    //pinmaker();
   }
   else if(sdcommand.substring(0,7) == "RESTORE"){
-    //restorefromseed(sdcommand.substring(8,sdcommand.length()));
+    restoreFromSeed();
     enterpin(true);
   }
   else{
     enterpin(false);
   }
-
-  /*ttgo->tft->fillScreen(TFT_BLUE);
-  ttgo->tft->drawString("Start wallet here", 25, 100);
-  if(haveKey) {
-    ttgo->tft->drawString("Key file found!", 25, 120);
-    ttgo->tft->drawString(savedseed, 35, 130);
-  } else {
-    ttgo->tft->drawString("Key file NOT found!", 25, 120);
-  }
-
-  if(haveCommand) {
-    ttgo->tft->drawString("Command file found!", 25, 140);
-    ttgo->tft->drawString(sdcommand, 35, 150);
-  } else {
-    ttgo->tft->drawString("Command file NOT found!", 25, 140);
-  }
-  Serial.println("waiting 30s");
-  delay(30000);
-  Serial.println("delay finished");
-  walletDone = true;    */
 }
 
 
