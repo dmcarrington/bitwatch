@@ -1,9 +1,11 @@
 /*
  * Copyright (c) 2020 David Carrington
  * 
+ * Port of Bowser wallet https://github.com/arcbtc/bowser-bitcoin-hardware-wallet to LILYGO T-Watch
+ *
  * Based on agoodWatch by Alex Goodyear
  * 
- * Press power button on startup to enter wallet, otherwise standard watch will be displayed.
+ * Press power button 3x on startup to enter wallet, otherwise standard watch will be displayed.
  *
  * Original header comment below ...
  * Copyright (c) 2020 Alex Goodyear
@@ -110,27 +112,31 @@ String seedWord = "";
 String wordCount = " Word 1";
 bool seed_done = false;
 
+// Transaction signing
 lv_obj_t * txinfo = NULL;
 lv_obj_t * signTxBtns = NULL;
 ElectrumTx tx;
 
+// Wallet reset UI
 lv_obj_t * resetBtns = NULL;
 lv_obj_t * resetInfo = NULL;
 lv_obj_t * main_menu = NULL;
 
+// Wallet restore UI
 lv_obj_t * restoreInfo = NULL;
 lv_obj_t * restoreBtns = NULL;
 String theSeed = "";
 
+// WIFI Access Point config
 const char *ssid = "yourAP";
 const char *password = "yourPassword";
 WiFiServer server(80);
 String ipaddress = "";
 
-void pinmaker();
-
+//========================================================================
+// Start a wireless access point for us to connect to to read our files
+//========================================================================
 void startWebserver(void) {
-  //Serial.begin(115200);
   Serial.println();
   Serial.println("Configuring access point...");
 
@@ -143,7 +149,6 @@ void startWebserver(void) {
   server.begin();
 
   Serial.println("Server started");
-
 }
 
 //========================================================================
@@ -275,6 +280,7 @@ static void sign_tx_event_handler(lv_obj_t * obj, lv_event_t event)
       lv_obj_del(txinfo);
       lv_obj_del(signTxBtns);
 
+      Serial.println(savedseed);
       HDPrivateKey hd(savedseed, passkey);
       HDPrivateKey account = hd.derive("m/84'/0'/0'/");
       Serial.println(account);
@@ -285,12 +291,13 @@ static void sign_tx_event_handler(lv_obj_t * obj, lv_event_t event)
       ttgo->tft->setTextSize(2);
       
       String signedtx = tx;
+      Serial.println("Signedtx: ");
       Serial.print(signedtx);
       int str_len = signedtx.length() + 1; 
       char char_array[str_len];
       signedtx.toCharArray(char_array, str_len);
       fs::File file = SPIFFS.open("/bitwatch.txt", FILE_WRITE);
-      file.print(char_array);
+      file.println(signedtx.c_str());
       file.close();
 
       ttgo->tft->fillScreen(TFT_BLACK);
@@ -300,14 +307,14 @@ static void sign_tx_event_handler(lv_obj_t * obj, lv_event_t event)
       String msg = "Saved to \n" + ipaddress + "/bitwatch.txt";
       ttgo->tft->println(msg.c_str());
       ttgo->tft->println("");
-
+      lv_obj_set_pos(main_menu, 0, 0);
       delay(3000);
         
     } else if(btn_index == 1) {
       // "cancel button pressed
       lv_obj_del(txinfo);
       lv_obj_del(signTxBtns);
-      
+      lv_obj_set_pos(main_menu, 0, 0);
     }
   }
 }
@@ -320,6 +327,7 @@ static const char * sign_tx_map[] = {"Sign", "Cancel", ""};
 void signTransaction() {
   if (sdcommand.substring(0, 4) == "SIGN"){
     String eltx = sdcommand.substring(5, sdcommand.length() + 1);
+    Serial.println(eltx);
 
     ttgo->tft->fillScreen(TFT_BLACK);
     ttgo->tft->setCursor(0, 20);
@@ -327,28 +335,41 @@ void signTransaction() {
     ttgo->tft->setTextColor(TFT_GREEN);
     ttgo->tft->println("");
     ttgo->tft->setCursor(0, 90);
-    ttgo->tft->println("  Bwahahahaha!");
+    ttgo->tft->println(" Bwahahahaha!");
     ttgo->tft->println("");
-    ttgo->tft->println("  Transaction");
-    ttgo->tft->println("  found");
+    ttgo->tft->println(" Transaction");
+    ttgo->tft->println(" found");
   
     delay(3000);
 
+    // hide the main menu
+    lv_obj_set_pos(main_menu, -500, 0);
+
+    int len_parsed = tx.parse(eltx);
+    if(len_parsed == 0){
+        ttgo->tft->println("Can't parse tx");
+        delay(3000);
+        lv_obj_set_pos(main_menu, 0, 0);
+        Serial.println("no valid transaction found");
+        return;
+    }
     String txnLabel = "";
+    Serial.println(tx.toString());
     for(int i=0; i < tx.tx.outputsNumber; i++){
       txnLabel =  txnLabel + (tx.tx.txOuts[i].address()) + "\n-> ";
       // Serial can't print uint64_t, so convert to int
       txnLabel = txnLabel + (int(tx.tx.txOuts[i].amount));
       txnLabel = txnLabel + " sat\n";
     }
+    Serial.println(txnLabel);
     txinfo = lv_label_create(lv_scr_act(), NULL);
-    lv_obj_align(txinfo, NULL, LV_ALIGN_CENTER, 0, -100);
+    lv_obj_align(txinfo, NULL, LV_ALIGN_CENTER, -100, -100);
     lv_label_set_text(txinfo, txnLabel.c_str());
 
     signTxBtns = lv_btnmatrix_create(lv_scr_act(), NULL);
     lv_btnmatrix_set_map(signTxBtns, sign_tx_map);
     lv_obj_set_size(signTxBtns, 240, 40);
-    lv_obj_align(signTxBtns, NULL, LV_ALIGN_CENTER, 0, -100);
+    lv_obj_align(signTxBtns, NULL, LV_ALIGN_CENTER, 0, 100);
     lv_obj_set_event_cb(signTxBtns, sign_tx_event_handler);
   }
 }
@@ -527,6 +548,17 @@ void menu_matrix(void)
     lv_obj_set_size(main_menu, 240, 240);
     lv_obj_align(main_menu, NULL, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_event_cb(main_menu, menu_event_handler);
+}
+
+//========================================================================
+void pinmaker(){
+  ttgo->tft->fillScreen(TFT_BLACK);
+  ttgo->tft->setCursor(0, 90);
+  ttgo->tft->setTextColor(TFT_GREEN);
+  ttgo->tft->println("  Enter pin using");
+  ttgo->tft->println("  keypad,");
+  delay(6000);
+  enterpin(true);
 }
 
 //========================================================================
@@ -828,17 +860,6 @@ void enterpin(bool set){
   passcode_matrix();
 }
 
-//========================================================================
-void pinmaker(){
-  ttgo->tft->fillScreen(TFT_BLACK);
-  ttgo->tft->setCursor(0, 90);
-  ttgo->tft->setTextColor(TFT_GREEN);
-  ttgo->tft->println("  Enter pin using");
-  ttgo->tft->println("  keypad,");
-  delay(6000);
-  enterpin(true);
-}
-
 //=======================================================================
 
 void startupWallet() {
@@ -978,15 +999,18 @@ void setup()
     ttgo->power->clearIRQ();
 
     // Capture start time to check when we can start the wallet
-    ttgo->tft->fillScreen(TFT_RED);
+    ttgo->tft->fillScreen(TFT_BLACK);
     int starttime = millis();
+    int power_button_press = 0;
     while (millis() - starttime < 5000 && decoy == true) {
-      ttgo->tft->drawString("waiting for keypress", 25, 100);
       if(irq) {
         irq = false;
         ttgo->power->readIRQ();
         if (ttgo->power->isPEKShortPressIRQ()) {
-          decoy = false;
+          power_button_press++;
+          if(power_button_press == 3) {
+            decoy = false;
+          }
         }
         ttgo->power->clearIRQ();
       }
