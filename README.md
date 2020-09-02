@@ -3,6 +3,8 @@ A basic bitcoin wallet to run on the LILYGO T-Watch 2020
 
 Inspired by Bowser (https://github.com/arcbtc/bowser-bitcoin-hardware-wallet)
 
+**WARNING**
+This project is work-in-progress! While I make every effory to make the wallet as reliable as possible, make sure you know what you are doing and I am not responsible for any losses.
 
 ## Pre-build setup
 T-Watch 2020 has no SD card, so use SPIFFS to host the text file providing wallet commands. We require two writable partitions in our internal storage to hold wallet data. The nature of the SPIFFS partition is that we must write to it as a whole, replacing/erasing any files currently on the partition. This would have the undesirable effect of removing our saved wallet keys every time we want to write a new command.
