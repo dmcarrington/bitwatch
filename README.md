@@ -1,7 +1,7 @@
 # Bitwatch
 A basic bitcoin wallet to run on the LILYGO T-Watch 2020
 
-Inspired by Bowser (https://github.com/arcbtc/bowser-bitcoin-hardware-wallet)
+Inspired by Bowser (https://github.com/arcbtc/bowser-bitcoin-hardware-wallet).
 
 **WARNING**
 This project is work-in-progress! While I make every effory to make the wallet as reliable as possible, make sure you know what you are doing and I am not responsible for any losses.
