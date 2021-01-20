@@ -8,12 +8,13 @@ This project is work-in-progress! While I make every effory to make the wallet a
 
 ## Pre-build setup
 
-Dependencies
+### Dependencies
 Install the LILYGO T-Watch library (https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library)
 and uBitcoin (https://github.com/micro-bitcoin/uBitcoin).
 Both require you to download the repository as a .zip file, then import the library from the .zip into Arduine Studio.
 After installing the TTWATCH library, select "TTGO T-Watch" as the target board before compiling. See https://diyprojects.io/lilygowatch-esp32-ttgo-t-watch-get-started-ide-arduino-platformio/ for more details on working with the T-Watch libraries.
 
+### Persistence
 T-Watch 2020 has no SD card, so use SPIFFS to host the text file providing wallet commands. We require two writable partitions in our internal storage to hold wallet data. The nature of the SPIFFS partition is that we must write to it as a whole, replacing/erasing any files currently on the partition. This would have the undesirable effect of removing our saved wallet keys every time we want to write a new command.
 To address this, we set up two partitions on the device, one to hold persistent data such as our wallet keys file, and another to hold our command file.
 
