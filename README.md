@@ -6,6 +6,11 @@ Inspired by Bowser (https://github.com/arcbtc/bowser-bitcoin-hardware-wallet).
 **WARNING**
 This project is work-in-progress! While I make every effory to make the wallet as reliable as possible, make sure you know what you are doing and I am not responsible for any losses.
 
+## Boards and Libraries
+The T-Watch uses the standard ESP32 board. If you don't already have the ESP32 board installed, go to `File`, select `Preferences` and under the "additional sources" text box, enter this URL: `https://dl.espressif.com/dl/package_esp32_index.json`. Then go into Tools->Board->Boards Manager. Search for esp32 and install the latest version.
+To load the library, go to the GitHub site, download the repository in zip format, and then import it into Arduino using the Library import ZIP function.
+`https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library`
+
 ## Pre-build setup
 
 ### Dependencies
