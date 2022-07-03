@@ -7,19 +7,16 @@ Inspired by Bowser (https://github.com/arcbtc/bowser-bitcoin-hardware-wallet).
 This project is work-in-progress! While I make every effory to make the wallet as reliable as possible, make sure you know what you are doing and I am not responsible for any losses.
 
 ## Boards and Libraries
-The T-Watch uses the standard ESP32 board. If you don't already have the ESP32 board installed, go to `File`, select `Preferences` and under the "additional sources" text box, enter this URL: `https://dl.espressif.com/dl/package_esp32_index.json`. Then go into Tools->Board->Boards Manager. Search for esp32 and install the latest version.
+The T-Watch uses the standard ESP32 board. If you don't already have the ESP32 board installed, go to `File`, select `Preferences` and under the "additional sources" text box, enter this URL: `https://dl.espressif.com/dl/package_esp32_index.json`. Then go into Tools->Board->Boards Manager. Search for esp32 and install the latest version. Then go to Tools->Boards, then under Boards, scroll down until you get to `TTGO T-watch`.
 To load the library, go to the GitHub site, download the repository in zip format, and then import it into Arduino using the Library import ZIP function.
-`https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library`
+`https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library`.
+Other libraries to be installed in the same manner:
+ - uBitcoin - https://github.com/micro-bitcoin/uBitcoin
 
-## Pre-build setup
+Finally, through the Libraries Manager, install the following:
+- QRcode 0.0.1
 
-### Dependencies
-Install the LILYGO T-Watch library (https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library)
-and uBitcoin (https://github.com/micro-bitcoin/uBitcoin).
-Both require you to download the repository as a .zip file, then import the library from the .zip into Arduine Studio.
-After installing the TTWATCH library, select "TTGO T-Watch" as the target board before compiling. See https://diyprojects.io/lilygowatch-esp32-ttgo-t-watch-get-started-ide-arduino-platformio/ for more details on working with the T-Watch libraries.
-
-### Persistence
+## Persistence
 T-Watch 2020 has no SD card, so use SPIFFS to host the text file providing wallet commands. We require two writable partitions in our internal storage to hold wallet data. The nature of the SPIFFS partition is that we must write to it as a whole, replacing/erasing any files currently on the partition. This would have the undesirable effect of removing our saved wallet keys every time we want to write a new command.
 To address this, we set up two partitions on the device, one to hold persistent data such as our wallet keys file, and another to hold our command file.
 
