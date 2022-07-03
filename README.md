@@ -1,10 +1,19 @@
 # Bitwatch
-A basic bitcoin wallet to run on the LILYGO T-Watch 2020
+Transform your LILYGO T-Watch 2020 into a Bitcoin hardware wallet!
 
 Inspired by Bowser (https://github.com/arcbtc/bowser-bitcoin-hardware-wallet).
 
 **WARNING**
 This project is work-in-progress! While I make every effory to make the wallet as reliable as possible, make sure you know what you are doing and I am not responsible for any losses.
+
+## Introduction
+The LilyGo TTwatch is a simple ESP32 based smartwatch that can be programmed like any other ESP32 board, and due to its appearance, I thought it would make an excellent candidate for a 'stealth' Bitcoin hardware wallet that can easily be disguised as a conventional cheap smartwatch. The hardware is very basic, with no camera, mic, USB storage or microSD card slot. This makes getting data on and off the device a bit challenging, but still possible. In summary, the usage of this device would go something like this:
+1. Turn device on for the first time. Initialise your wallet, set a PIN code, record your seed phrase as normal.
+2. From the menu in the wallet mode, export the wallet zpub (public master key for the wallet). We need to get this back to our laptop to set up a watch-only wallet, however we have no USB-accessible storage on the device, and no microSD. So we start up a wireless access point on the watch, and serve up the zpub file over it. Connect to this AP on the laptop and download the file.
+3. Fire up Electrum, and set up a watch-only wallet using the zpub - instructions for how to do this are here if you need it: https://bitcointalk.org/index.php?topic=4573616.0
+4. Send some sats to your wallet - either using Electrum or by displaying the receive address & QR code on the watch
+5. Now when we want to send some sats, we create a partially-signed transaction (PSBT) using Electrum, which we need to send to the watch for signing. Again, we are limited in the ways in which we can get data onto the device at run-time, so we have to use either Arduino Studio or the `esptool` python script to load the PSBT over USB to the watch - more details on exactly how to do this below. TODO: investigate if we can POST this to a webserver on the watch's AP instead
+6. Once the PSBT has been sent to the watch, use the `sign transaction` menu item. If successful, the signed transaction will be made available on the watch's AP. Connect to this again and download the transaction as you did with the zpub. You can now take the transaction and broadcast it through a tool of your choice - RoninDojo has a nice one.
 
 ## Boards and Libraries
 The T-Watch uses the standard ESP32 board. If you don't already have the ESP32 board installed, go to `File`, select `Preferences` and under the "additional sources" text box, enter this URL: `https://dl.espressif.com/dl/package_esp32_index.json`. Then go into Tools->Board->Boards Manager. Search for esp32 and install the latest version. Then go to Tools->Boards, then under Boards, scroll down until you get to `TTGO T-watch`.
@@ -65,7 +74,7 @@ Once you have the hex of the transaction, save it into `bitwatch.txt`, prefaced 
 Once complete, connect to the watch access point, copy the signed transaction, reconnect to your regular wifi, and paste the signed transaction hex into a Bitcoin transaction broadcast website, e.g. https://blockstream.info/tx/push
 
 ### Export ZPUB
-The ZPUB of the wallet allows Electrum (or any other watch-only wallet) track the current value held in the wallet, and generate unsigned transactions. The ZPUB will be displayed as a QR code and written as text form to SPIFFS, accessible via the local access point.
+The ZPUB of the wallet allows Electrum (or any other watch-only wallet) track the current value held in the wallet, and generate unsigned transactions. The ZPUB will be displayed as a QR code and written as text form to SPIFFS, accessible via the local access point. This file can then be imported into your wallet software e.g. Electrum from where you can receive transactions and create a PSBT for signing on your watch.
 
 ### Show seed
 Shows the seed words to allow recovery of the wallet.
