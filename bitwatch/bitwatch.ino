@@ -164,7 +164,7 @@ void showseed() {
   ttgo->tft->setTextColor(TFT_BLUE);
   ttgo->tft->setTextSize(2);
   ttgo->tft->println(savedseed);
-  delay(10000);
+  delay(30000);
 }
 
 //========================================================================
