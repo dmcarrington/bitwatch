@@ -189,7 +189,7 @@ void exportZpub() {
   ttgo->tft->setCursor(0, 220);
   String msg = "Saved to \n" + ipaddress + "/bitwatch.txt";
   ttgo->tft->println(msg.c_str());
-  delay(5000);
+  delay(10000);
 }
 
 //========================================================================
