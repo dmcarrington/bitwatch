@@ -15,6 +15,8 @@ The LilyGo TTwatch is a simple ESP32 based smartwatch that can be programmed lik
 5. Now when we want to send some sats, we create a partially-signed transaction (PSBT) using Electrum, which we need to send to the watch for signing. Again, we are limited in the ways in which we can get data onto the device at run-time, so we have to use either Arduino Studio or the `esptool` python script to load the PSBT over USB to the watch - more details on exactly how to do this below. TODO: investigate if we can POST this to a webserver on the watch's AP instead
 6. Once the PSBT has been sent to the watch, use the `sign transaction` menu item. If successful, the signed transaction will be made available on the watch's AP. Connect to this again and download the transaction as you did with the zpub. You can now take the transaction and broadcast it through a tool of your choice - RoninDojo has a nice one.
 
+<a href="https://odysee.com/bitwatch-introduction:c?r=H9XobdjBDvK7Z1bQPUZSQccvEYEA8qPf" target="_blank"><img src="https://user-images.githubusercontent.com/32391650/177209415-e0f21b06-1e7b-4d71-94c7-2392d891b7b4.png"></a>
+
 ## Boards and Libraries
 The T-Watch uses the standard ESP32 board. If you don't already have the ESP32 board installed, go to `File`, select `Preferences` and under the "additional sources" text box, enter this URL: `https://dl.espressif.com/dl/package_esp32_index.json`. Then go into Tools->Board->Boards Manager. Search for esp32 and install the latest version. Then go to Tools->Boards, then under Boards, scroll down until you get to `TTGO T-watch`.
 To load the library, go to the GitHub site, download the repository in zip format, and then import it into Arduino using the Library import ZIP function.
