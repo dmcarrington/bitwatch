@@ -5,6 +5,17 @@
  * 
 */
 
+#include <WiFi.h>
+#include <WebServer.h>
+#include <FS.h>
+#include <SPIFFS.h>
+using WebServerClass = WebServer;
+fs::SPIFFSFS &FlashFS = SPIFFS;
+#define FORMAT_ON_FAIL true
+
+#include <AutoConnect.h>
+#include <SPI.h>
+
 #include "config.h"
 
 #include "freertos/FreeRTOS.h"
@@ -13,18 +24,20 @@
 #include "freertos/queue.h"
 #include <soc/rtc.h>
 #include "esp_wifi.h"
-#include <WiFi.h>
-#include <WiFiClient.h>
+
 #include <Electrum.h>
 #include "qrcode.h"
 #include "gui.h"
-#include "SPIFFS.h"
-#include "FFat.h"
+
 #include "Bitcoin.h"
 #include "Hash.h"
 #include "seedwords.h"
 #include "watch.h"
-#include <WiFiAP.h>
+
+
+
+#define PARAM_FILE "/elements.json"
+#define KEY_FILE "/thekey.txt"
 
 // watch instance
 TTGOClass *ttgo;
@@ -392,7 +405,7 @@ static void restore_btn_event_handler(lv_obj_t *obj, lv_event_t event) {
       ttgo->tft->setTextSize(2);
       ttgo->tft->println("  Saving seed...");
       delay(2000);
-      fs::File file = FFat.open("/key.txt", FILE_WRITE);
+      fs::File file = SPIFFS.open("/key.txt", FILE_WRITE);
       file.print(theSeed + "\n");
       file.close();
       fs::File outfile = SPIFFS.open("/bitwatch.txt", FILE_WRITE);
@@ -535,7 +548,7 @@ static void seedmaker_cb(lv_obj_t *obj, lv_event_t event) {
         lv_obj_del(seedBtn);
         pinmaker();
       } else {
-        fs::File file = FFat.open("/key.txt", FILE_WRITE);
+        fs::File file = SPIFFS.open("/key.txt", FILE_WRITE);
         file.print(seedgeneratestr.substring(0, seedgeneratestr.length()) + "\n");
         file.close();
 
@@ -609,12 +622,12 @@ static void confirmPin() {
     sha256(passkey, newpasskeyresult);
     hashed = toHex(newpasskeyresult, 32);
 
-    fs::File file = FFat.open("/pass.txt", FILE_WRITE);
+    fs::File file = SPIFFS.open("/pass.txt", FILE_WRITE);
     file.print(hashed + "\n");
     file.close();
   }
 
-  fs::File otherfile = FFat.open("/pass.txt");
+  fs::File otherfile = SPIFFS.open("/pass.txt");
   savedpinhash = otherfile.readStringUntil('\n');
   otherfile.close();
 
@@ -742,24 +755,29 @@ void enterpin(bool set) {
 //=======================================================================
 
 void startupWallet() {
+  FlashFS.begin(FORMAT_ON_FAIL);
   if (!SPIFFS.begin(true)) {
     Serial.println("An Error has occurred while mounting SPIFFS");
     return;
   }
 
-  if (!FFat.begin(true)) {
-    Serial.println("An error has occurred while mounting FFAT");
-    return;
+  // get the saved details and store in global variables
+  File paramFile = FlashFS.open(PARAM_FILE, "r");
+  if (paramFile)
+  {
+ 
   }
+
+  paramFile.close();
 
   bool haveKey = true;
   bool haveCommand = true;
 
   //Checks if the user has an account or is forcing a reset
-  haveKey = FFat.exists("/key.txt");
+  haveKey = SPIFFS.exists("/key.txt");
   if (haveKey) {
     Serial.println("Key file exists:");
-    fs::File keyfile = FFat.open("/key.txt", FILE_READ);
+    fs::File keyfile = SPIFFS.open("/key.txt", FILE_READ);
     savedseed = keyfile.readStringUntil('\n');
     Serial.println(savedseed);
     keyfile.close();
