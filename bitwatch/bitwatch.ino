@@ -86,7 +86,8 @@ static const char PAGE_RESTORE[] PROGMEM = R"(
 )";
 
 static const char PAGE_INIT[] PROGMEM = R"(
-  "uri": "/newWallet",
+{
+  "uri": "/newwallet",
   "title": "Bitwatch Config",
   "menu": true,
   "element": [
@@ -118,7 +119,7 @@ static const char PAGE_INIT[] PROGMEM = R"(
       "name": "load",
       "type": "ACSubmit",
       "value": "Load",
-      "uri": "/newWallet"
+      "uri": "/newwallet"
     },
     {
       "name": "save",
@@ -161,7 +162,7 @@ static const char PAGE_SAVEWALLET[] PROGMEM = R"(
       "name": "ok",
       "type": "ACSubmit",
       "value": "OK",
-      "uri": "/newWallet"
+      "uri": "/newwallet"
     }
   ]
 }
@@ -939,14 +940,24 @@ void startupWallet() {
       File param = FlashFS.open(PARAM_FILE, "r");
       if (param)
       {
+        Serial.println("loading params for initAux");
         aux.loadElement(param, {"pin", "password", "seedphrase"});
         param.close();
+      } else {
+        Serial.println("Failed to open params for initAux");
       }
 
-      if (portal.where() == "/newWallet")
+      if (portal.where() == "/newwallet")
       {
-        aux.loadElement(param, {"pin", "password", "seedphrase"});
-        param.close();
+        File param = FlashFS.open(PARAM_FILE, "r");
+        if (param)
+        {
+          Serial.println("loading params for initAux - 2");
+          aux.loadElement(param, {"pin", "password", "seedphrase"});
+          param.close();
+        }else {
+          Serial.println("Failed to open params for initAux");
+        }
       }
 
       return String();
