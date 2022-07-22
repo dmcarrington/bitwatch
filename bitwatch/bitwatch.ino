@@ -265,7 +265,7 @@ void exportZpub() {
   int str_len = pubkey.length() + 1;
   char char_array[str_len];
   pubkey.toCharArray(char_array, str_len);
-  fs::File file = SPIFFS.open("/bitwatch.txt", FILE_WRITE);
+  fs::File file = FlashFS.open("/bitwatch.txt", FILE_WRITE);
   file.print(char_array);
   file.close();
 
@@ -289,15 +289,15 @@ void exportZpub() {
 void displayPubkey() {
   HDPublicKey hd(pubkey);
   String pubnumn = "0";
-  if (SPIFFS.exists("/num.txt")) {
-    fs::File numFile = SPIFFS.open("/num.txt");
+  if (FlashFS.exists("/num.txt")) {
+    fs::File numFile = FlashFS.open("/num.txt");
     pubnumn = numFile.readStringUntil('\n');
     Serial.println(pubnumn);
     numFile.close();
   }
 
   int pubnum = pubnumn.toInt() + 1;
-  fs::File file = SPIFFS.open("/num.txt", FILE_WRITE);
+  fs::File file = FlashFS.open("/num.txt", FILE_WRITE);
   file.print(pubnum);
   file.close();
 
@@ -347,7 +347,7 @@ static void sign_tx_event_handler(lv_obj_t *obj, lv_event_t event) {
       int str_len = signedtx.length() + 1;
       char char_array[str_len];
       signedtx.toCharArray(char_array, str_len);
-      fs::File file = SPIFFS.open("/bitwatch.txt", FILE_WRITE);
+      fs::File file = FlashFS.open("/bitwatch.txt", FILE_WRITE);
       file.println(signedtx.c_str());
       file.close();
 
@@ -695,13 +695,14 @@ void seedmaker() {
   for (int i = 0; i < 23; i++)
   {
     seedphrase = seedphrase + " " + seedwords[random(0, 2047)];
+    Serial.println(seedphrase);
   }
   Serial.println("Created seedphrase " + seedphrase);
   
-  File param = FlashFS.open(PARAM_FILE, "w");
+  File param = FlashFS.open(PARAM_FILE, "FILE_WRITE");
   if (param)
   {
-    StaticJsonDocument<2500> doc;
+    StaticJsonDocument<256> doc;
     doc["pin"] = "1234";
     doc["password"] = "ToTheMoon1";
     doc["seedphrase"] = seedphrase;
@@ -714,7 +715,7 @@ void seedmaker() {
 
   param.close();
 
-  printFile(PARAM_FILE);
+  //printFile(PARAM_FILE);
 }
 
 //========================================================================
@@ -854,49 +855,53 @@ void portalLaunch()
 
 void startupWallet() {
   FlashFS.begin(FORMAT_ON_FAIL);
-  if (!SPIFFS.begin(true)) {
-    Serial.println("An Error has occurred while mounting SPIFFS");
-    return;
-  }
+  SPIFFS.begin(true);
 
   bool needInit = true;
 
   // get the saved details and store in global variables
   File paramFile = FlashFS.open(PARAM_FILE, "r");
   Serial.println("reading PARAM_FILE");
-  printFile(PARAM_FILE);
+  //printFile(PARAM_FILE);
   if (paramFile)
   {
-    StaticJsonDocument<2500> doc;
+    StaticJsonDocument<256> doc;
     DeserializationError error = deserializeJson(doc, paramFile.readString());
-
-    const JsonObject pinRoot = doc["pin"];
-    char pinChar[64];
-    strlcpy(pinChar, doc["pin"], sizeof(pinChar));
-    pin = String(pinChar);
-    Serial.println("Read pin = " + pin);
-
-    const JsonObject passRoot = doc[1];
-    const char *apPasswordChar = passRoot["value"];
-    const char *apNameChar = passRoot["name"];
-    if (String(apPasswordChar) != "" && String(apNameChar) == "password")
+    if(error) 
     {
-      apPassword = apPasswordChar;
-    }
-    Serial.println("Read password = " + apPassword);
+      Serial.println("Error decoding param file, will recreate");
+    } else {
+    
 
-    const JsonObject maRoot = doc["seedphrase"];
-    char seedphraseChar[2500];
-    strlcpy(seedphraseChar, doc["seedphrase"], sizeof(seedphraseChar));
-    seedphrase = String(seedphraseChar);
-    if (seedphrase != "")
-    {
-      needInit = false;
+      const JsonObject pinRoot = doc["pin"];
+      char pinChar[64];
+      strlcpy(pinChar, doc["pin"], sizeof(pinChar));
+      pin = String(pinChar);
+      Serial.println("Read pin = " + pin);
+  
+      const JsonObject passRoot = doc[1];
+      const char *apPasswordChar = passRoot["value"];
+      const char *apNameChar = passRoot["name"];
+      if (String(apPasswordChar) != "" && String(apNameChar) == "password")
+      {
+        apPassword = apPasswordChar;
+      }
+      Serial.println("Read password = " + apPassword);
+  
+      const JsonObject maRoot = doc["seedphrase"];
+      char seedphraseChar[2500];
+      strlcpy(seedphraseChar, doc["seedphrase"], sizeof(seedphraseChar));
+      seedphrase = String(seedphraseChar);
+      if (seedphrase != "")
+      {
+        needInit = false;
+      }
+      Serial.println("Read seedphrase = " + seedphrase);
     }
-    Serial.println("Read seedphrase = " + seedphrase);
-  } else {
-    Serial.println("failed to open param file");
+  }else {
+      Serial.println("failed to open param file");
   }
+  
 
   paramFile.close();
 
