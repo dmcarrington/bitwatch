@@ -26,7 +26,7 @@ fs::SPIFFSFS &FlashFS = SPIFFS;
 #include "esp_wifi.h"
 
 #include <Electrum.h>
-#include "qrcode.h"
+#include "qrcoded.h"
 #include "gui.h"
 
 #include "Bitcoin.h"
@@ -49,44 +49,24 @@ EventGroupHandle_t isr_group = NULL;
 bool decoy = true;
 bool irq = false;
 
-// Command contained in 'bitwatch.txt' in the SPIFFS partition.
-String sdcommand;
-
-// mnemonic seed stored on FAT partition
-String savedseed;
-
 // PIN code elements
-String passkey = "";
-String hashed = "";
-String savedpinhash;
-bool setPin = false;
-bool confirmingPin = false;
 lv_obj_t *pinTitle = NULL;
-String repeatPincode = "";
 lv_obj_t *pinPad = NULL;
 
 // wallet elements
 String privatekey;
 String pubkey;
 
+// Global variables read from config file
+String pin;
+String apPassword = "ToTheMoon1"; //default WiFi AP password
+String seedphrase;
+String psbt;
+
 // PIN generation / entry UI elements
 String pincode = "";
 String obfuscated = "";
 lv_obj_t *label1 = NULL;
-
-int seedCount = 1;
-// UI elements for showing seed words
-lv_obj_t *seedLabel = NULL;
-lv_obj_t *seedBtn = NULL;
-lv_obj_t *btnLabel = NULL;
-lv_obj_t *wordLabel = NULL;
-// String of all generated seed words
-String seedgeneratestr = "";
-// Current seed word for user to write down
-String seedWord = "";
-// Display current seed word index
-String wordCount = " Word 1";
-bool seed_done = false;
 
 // Transaction signing
 lv_obj_t *txinfo = NULL;
@@ -98,21 +78,119 @@ lv_obj_t *resetBtns = NULL;
 lv_obj_t *resetInfo = NULL;
 lv_obj_t *main_menu = NULL;
 
-// Wallet restore UI
-lv_obj_t *restoreInfo = NULL;
-lv_obj_t *restoreBtns = NULL;
-String theSeed = "";
 
-// WIFI Access Point config
-const char *ssid = "yourAP";
-const char *password = "yourPassword";
-WiFiServer server(80);
-String ipaddress = "";
+
+
+// custom access point pages
+static const char PAGE_RESTORE[] PROGMEM = R"(
+)";
+
+static const char PAGE_INIT[] PROGMEM = R"(
+  "uri": "/newWallet",
+  "title": "Bitwatch Config",
+  "menu": true,
+  "element": [
+    {
+      "name": "text",
+      "type": "ACText",
+      "value": "Bitwatch options",
+      "style": "font-family:Arial;font-size:16px;font-weight:400;color:#191970;margin-botom:15px;"
+    },
+    {
+      "name": "pin",
+      "type": "ACInput",
+      "label": "PIN code for Bitwatch wallet",
+      "value": "1234"
+    },
+    {
+      "name": "password",
+      "type": "ACInput",
+      "label": "Password for Bitwatch AP WiFi",
+      "value": "ToTheMoon1"
+    },
+    {
+      "name": "seedphrase",
+      "type": "ACInput",
+      "label": "Wallet Seed Phrase",
+      "value": "seedphrase"
+    },
+    {
+      "name": "load",
+      "type": "ACSubmit",
+      "value": "Load",
+      "uri": "/newWallet"
+    },
+    {
+      "name": "save",
+      "type": "ACSubmit",
+      "value": "Save",
+      "uri": "/saveWallet"
+    },
+    {
+      "name": "adjust_width",
+      "type": "ACElement",
+      "value": "<script type='text/javascript'>window.onload=function(){var t=document.querySelectorAll('input[]');for(i=0;i<t.length;i++){var e=t[i].getAttribute('placeholder');e&&t[i].setAttribute('size',e.length*.8)}};</script>"
+    }
+  ]
+ }
+)";
+
+static const char PAGE_SAVEWALLET[] PROGMEM = R"(
+{
+  "uri": "/saveWallet",
+  "title": "Elements",
+  "menu": false,
+  "element": [
+    {
+      "name": "caption",
+      "type": "ACText",
+      "format": "Elements have been saved to %s",
+      "style": "font-family:Arial;font-size:18px;font-weight:400;color:#191970"
+    },
+    {
+      "name": "validated",
+      "type": "ACText",
+      "style": "color:red"
+    },
+    {
+      "name": "echo",
+      "type": "ACText",
+      "style": "font-family:monospace;font-size:small;white-space:pre;"
+    },
+    {
+      "name": "ok",
+      "type": "ACSubmit",
+      "value": "OK",
+      "uri": "/newWallet"
+    }
+  ]
+}
+)";
+
+static const char PAGE_VIEWWALLET[] PROGMEM = R"(
+)";
+
+static const char PAGE_SUBMITTX[] PROGMEM = R"(
+)";
+
+static const char PAGE_SIGNEDTX[] PROGMEM = R"(
+)";
+
+// portal and config
+WebServerClass server;
+AutoConnect portal(server);
+AutoConnectConfig config;
+AutoConnectAux restoreAux;
+AutoConnectAux initAux;
+AutoConnectAux saveWalletAux;
+AutoConnectAux viewWalletAux;
+AutoConnectAux submittxAux;
+AutoConnectAux signedtxAux;
 
 //========================================================================
 // Start a wireless access point for us to connect to to read our files
 //========================================================================
-void startWebserver(void) {
+/*void startWebserver(void) {
   Serial.println();
   Serial.println("Configuring access point...");
 
@@ -125,7 +203,7 @@ void startWebserver(void) {
   server.begin();
 
   Serial.println("Server started");
-}
+}*/
 
 //========================================================================
 // Show an address as a QR code
@@ -167,7 +245,7 @@ void showAddress(String XXX) {
 //========================================================================
 // Show seed words
 //========================================================================
-void showseed() {
+/*void showseed() {
   ttgo->tft->fillScreen(TFT_BLACK);
   ttgo->tft->setCursor(0, 20);
   ttgo->tft->setTextSize(3);
@@ -178,7 +256,7 @@ void showseed() {
   ttgo->tft->setTextSize(2);
   ttgo->tft->println(savedseed);
   delay(30000);
-}
+}*/
 
 //========================================================================
 // Show ZPUB as QR code and export to SPIFFS
@@ -200,8 +278,8 @@ void exportZpub() {
 
   ttgo->tft->setTextSize(1);
   ttgo->tft->setCursor(0, 220);
-  String msg = "Saved to \n" + ipaddress + "/bitwatch.txt";
-  ttgo->tft->println(msg.c_str());
+  //String msg = "Saved to \n" + ipaddress + "/bitwatch.txt";
+  //ttgo->tft->println(msg.c_str());
   delay(10000);
 }
 
@@ -253,8 +331,8 @@ static void sign_tx_event_handler(lv_obj_t *obj, lv_event_t event) {
       lv_obj_del(txinfo);
       lv_obj_del(signTxBtns);
 
-      Serial.println(savedseed);
-      HDPrivateKey hd(savedseed, passkey);
+      Serial.println(seedphrase);
+      HDPrivateKey hd(seedphrase, pin);
       HDPrivateKey account = hd.derive("m/84'/0'/0'/");
       Serial.println(account);
 
@@ -277,10 +355,10 @@ static void sign_tx_event_handler(lv_obj_t *obj, lv_event_t event) {
       ttgo->tft->setCursor(0, 100);
       ttgo->tft->setTextSize(2);
 
-      String msg = "Saved to \n" + ipaddress + "/bitwatch.txt";
-      ttgo->tft->println(msg.c_str());
-      ttgo->tft->println("");
-      lv_obj_set_pos(main_menu, 0, 0);
+      //String msg = "Saved to \n" + ipaddress + "/bitwatch.txt";
+      //ttgo->tft->println(msg.c_str());
+      //ttgo->tft->println("");
+      //lv_obj_set_pos(main_menu, 0, 0);
       delay(3000);
 
     } else if (btn_index == 1) {
@@ -298,8 +376,8 @@ static const char *sign_tx_map[] = { "Sign", "Cancel", "" };
 // Submenu for signing a transaction
 //========================================================================
 void signTransaction() {
-  if (sdcommand.substring(0, 4) == "SIGN") {
-    String eltx = sdcommand.substring(5, sdcommand.length() + 1);
+  //if (sdcommand.substring(0, 4) == "SIGN") {
+    String eltx = psbt; //sdcommand.substring(5, sdcommand.length() + 1);
     Serial.println(eltx);
 
     ttgo->tft->fillScreen(TFT_BLACK);
@@ -344,7 +422,7 @@ void signTransaction() {
     lv_obj_set_size(signTxBtns, 240, 40);
     lv_obj_align(signTxBtns, NULL, LV_ALIGN_CENTER, 0, 100);
     lv_obj_set_event_cb(signTxBtns, sign_tx_event_handler);
-  }
+  //}
 }
 
 //========================================================================
@@ -391,7 +469,7 @@ void confirmReset() {
 //========================================================================
 // handle restore confirmation
 //========================================================================
-static void restore_btn_event_handler(lv_obj_t *obj, lv_event_t event) {
+/*static void restore_btn_event_handler(lv_obj_t *obj, lv_event_t event) {
   if (event == LV_EVENT_CLICKED) {
     unsigned int btn_index = lv_btnmatrix_get_active_btn(obj);
     if (btn_index == 0) {
@@ -422,12 +500,12 @@ static void restore_btn_event_handler(lv_obj_t *obj, lv_event_t event) {
   }
 }
 
-static const char *restore_btn_map[] = { "Restore", "Cancel", "" };
+static const char *restore_btn_map[] = { "Restore", "Cancel", "" };*/
 
 //========================================================================
 // Sub menu to confirm restore
 //========================================================================
-void confirmRestoreFromSeed() {
+/*void confirmRestoreFromSeed() {
   lv_obj_set_pos(main_menu, -500, 0);
   restoreInfo = lv_label_create(lv_scr_act(), NULL);
   lv_obj_align(restoreInfo, NULL, LV_ALIGN_CENTER, -60, -60);
@@ -438,23 +516,23 @@ void confirmRestoreFromSeed() {
   lv_obj_set_size(restoreBtns, 240, 40);
   lv_obj_align(restoreBtns, NULL, LV_ALIGN_CENTER, 0, 100);
   lv_obj_set_event_cb(restoreBtns, restore_btn_event_handler);
-}
+}*/
 
 //========================================================================
 // attempt to restore from phrase stored in SPIFFS
 //========================================================================
 void restoreFromSeed() {
-  if (sdcommand.substring(0, 7) == "RESTORE") {
+  /*if (sdcommand.substring(0, 7) == "RESTORE") {
     theSeed = sdcommand.substring(8, sdcommand.length());
     confirmRestoreFromSeed();
-  } else {
+  } else {*/
     ttgo->tft->fillScreen(TFT_BLACK);
     ttgo->tft->setTextSize(2);
     ttgo->tft->setCursor(0, 90);
     ttgo->tft->setTextColor(TFT_RED);
     ttgo->tft->println("'RESTORE *seed phrase*' not found on SPIFFS");
-    delay(3000);
-  }
+  /*  delay(3000);
+  }*/
 }
 
 //========================================================================
@@ -478,7 +556,7 @@ static void menu_event_handler(lv_obj_t *obj, lv_event_t event) {
         break;
       case (3):
         Serial.println("Show Seed");
-        showseed();
+        //showseed();
         break;
       case (4):
         Serial.println("Wipe Device");
@@ -517,7 +595,7 @@ void menu_matrix(void) {
 }
 
 //========================================================================
-void pinmaker() {
+/*void pinmaker() {
   ttgo->tft->fillScreen(TFT_BLACK);
   ttgo->tft->setCursor(0, 90);
   ttgo->tft->setTextColor(TFT_GREEN);
@@ -525,13 +603,13 @@ void pinmaker() {
   ttgo->tft->println("  keypad,");
   delay(6000);
   enterpin(true);
-}
+}*/
 
 //========================================================================
 // On each button press, generate the next of 24 seed words.
 // When completed, save to seed file in FFAT and SPIFFS partitions
 //========================================================================
-static void seedmaker_cb(lv_obj_t *obj, lv_event_t event) {
+/*static void seedmaker_cb(lv_obj_t *obj, lv_event_t event) {
   if (event == LV_EVENT_CLICKED) {
     if (seedCount <= 23) {
       seedCount++;
@@ -564,13 +642,13 @@ static void seedmaker_cb(lv_obj_t *obj, lv_event_t event) {
       }
     }
   }
-}
+}*/
 
 //========================================================================
 // Loop over a set of 24 randomly-generated seed words
 //========================================================================
 void seedmaker() {
-  ttgo->tft->fillScreen(TFT_BLACK);
+  /*ttgo->tft->fillScreen(TFT_BLACK);
   ttgo->tft->setCursor(0, 100);
   ttgo->tft->setTextColor(TFT_GREEN);
   ttgo->tft->setTextSize(2);
@@ -593,7 +671,25 @@ void seedmaker() {
 
   wordLabel = lv_label_create(lv_scr_act(), NULL);
   lv_obj_align(wordLabel, NULL, LV_ALIGN_CENTER, 0, -60);
-  lv_label_set_text(wordLabel, "Word 1");
+  lv_label_set_text(wordLabel, "Word 1");*/
+  seedphrase = seedwords[random(0, 2047)];
+  for (int i = 0; i < 23; i++)
+  {
+    seedphrase = seedphrase + " " + seedwords[random(0, 2047)];
+  }
+  
+  File param = FlashFS.open(PARAM_FILE, "w");
+  if (param)
+  {
+    StaticJsonDocument<256> doc;
+    doc["seedphrase"] = seedphrase;
+    // Serialize JSON to file
+    if (serializeJson(doc, param) == 0) {
+      Serial.println(F("Failed to write to file"));
+    }
+  }
+
+  param.close();
 }
 
 //========================================================================
@@ -616,7 +712,7 @@ void getKeys(String mnemonic, String password) {
 
 //========================================================================
 static void confirmPin() {
-  bool set = setPin;
+  /*bool set = setPin;
   if (set == true) {
     uint8_t newpasskeyresult[32];
     sha256(passkey, newpasskeyresult);
@@ -635,24 +731,24 @@ static void confirmPin() {
   sha256(passkey, passkeyresult);
   hashed = toHex(passkeyresult, 32);
   Serial.println(savedpinhash);
-  Serial.println(hashed);
+  Serial.println(hashed);*/
 
-  if (savedpinhash == hashed || set == true) {
+  if (/*savedpinhash == hashed || set == true*/ pincode == pin) {
     Serial.println("PIN ok");
-    getKeys(savedseed, passkey);
+    getKeys(seedphrase, pin);
     ttgo->tft->fillScreen(TFT_BLACK);
     ttgo->tft->setCursor(0, 110);
     ttgo->tft->setTextSize(2);
     ttgo->tft->setTextColor(TFT_GREEN);
     ttgo->tft->print(" Wallet Loaded!");
-    startWebserver();
-    delay(3000);
+    //startWebserver();
+    delay(1000);
     lv_obj_del(pinPad);
     lv_obj_del(pinTitle);
     lv_obj_del(label1);
     menu_matrix();
     return;
-  } else if (savedpinhash != hashed && set == false) {
+  } else /*if (savedpinhash != hashed && set == false)*/ {
     ttgo->tft->fillScreen(TFT_BLACK);
     ttgo->tft->setCursor(0, 110);
     ttgo->tft->setTextSize(2);
@@ -670,53 +766,18 @@ static void pin_event_handler(lv_obj_t *obj, lv_event_t event) {
     const char *txt = lv_btnmatrix_get_active_btn_text(obj);
     unsigned int btn_index = lv_btnmatrix_get_active_btn(obj);
     if (btn_index == 10) {
-      // Clearn button pressed
-      if (confirmingPin) {
-        repeatPincode = "";
-      } else {
-        pincode = "";
-      }
+      // Clear button pressed
+      pincode = "";
       obfuscated = "";
       lv_label_set_text(label1, obfuscated.c_str());
     } else if (btn_index == 11) {
-      if (confirmingPin) {
-        if (repeatPincode == pincode) {
-          // pincode confirmed successfully, set it
-          passkey = pincode;
-          confirmPin();
-        } else {
-          // pin did not match, start over
-          ttgo->tft->fillScreen(TFT_BLACK);
-          ttgo->tft->setCursor(0, 110);
-          ttgo->tft->setTextSize(2);
-          ttgo->tft->setTextColor(TFT_RED);
-          ttgo->tft->print("Try again");
-          pincode = "";
-          obfuscated = "";
-          confirmingPin = false;
-          delay(3000);
-        }
-      } else {
-        if (setPin) {
-          confirmingPin = true;
-          obfuscated = "";
-          lv_label_set_text(label1, obfuscated.c_str());
-          lv_label_set_text(pinTitle, "Confirm PIN");
-        } else {
-          passkey = pincode;
-          confirmPin();
-        }
-      }
-
+      // Verify pin and start wallet if correct
+      confirmPin();
     } else {
       // Number button 0-9
-      if (confirmingPin) {
-        repeatPincode = repeatPincode + String(txt);
-      } else {
-        pincode = pincode + String(txt);
-        printf("pincode = %s\n", pincode.c_str());
-      }
-
+      pincode = pincode + String(txt);
+      printf("pincode = %s\n", pincode.c_str());
+      
       obfuscated = obfuscated + "*";
       lv_label_set_text(label1, obfuscated.c_str());
     }
@@ -747,8 +808,7 @@ void passcode_matrix(void) {
 }
 
 //========================================================================
-void enterpin(bool set) {
-  setPin = set;
+void enterpin() {
   passcode_matrix();
 }
 
@@ -761,20 +821,95 @@ void startupWallet() {
     return;
   }
 
+  bool needInit = true;
+
   // get the saved details and store in global variables
   File paramFile = FlashFS.open(PARAM_FILE, "r");
   if (paramFile)
   {
- 
+    StaticJsonDocument<2500> doc;
+    DeserializationError error = deserializeJson(doc, paramFile.readString());
+
+    const JsonObject passRoot = doc[0];
+    const char *apPasswordChar = passRoot["value"];
+    const char *apNameChar = passRoot["name"];
+    if (String(apPasswordChar) != "" && String(apNameChar) == "password")
+    {
+      apPassword = apPasswordChar;
+    }
+
+    const JsonObject maRoot = doc[1];
+    const char *seedphraseChar = maRoot["value"];
+    seedphrase = seedphraseChar;
+    if (seedphrase != "")
+    {
+      needInit = false;
+    }
   }
 
   paramFile.close();
 
-  bool haveKey = true;
-  bool haveCommand = true;
+  // general WiFi setting
+  config.autoReset = false;
+  config.autoReconnect = true;
+  config.reconnectInterval = 1; // 30s
+  config.beginTimeout = 10000UL;
+
+  // start portal if we decide we need to initialise the config
+  if (needInit)
+  {
+    // Initialise a new wallet seed phrase
+    seedmaker();
+    
+    // handle access point traffic
+    server.on("/", []() {
+      String content = "<h1>Bitwatch</br>Stealth Bitcoin hardware wallet/h1>";
+      content += AUTOCONNECT_LINK(COG_24);
+      server.send(200, "text/html", content);
+    });
+
+    initAux.load(FPSTR(PAGE_INIT));
+    initAux.on([](AutoConnectAux &aux, PageArgument &arg) {
+      File param = FlashFS.open(PARAM_FILE, "r");
+      if (param)
+      {
+        aux.loadElement(param, {"pin", "password", "seedphrase"});
+        param.close();
+      }
+
+      return String();
+    });
+
+    saveWalletAux.load(FPSTR(PAGE_SAVEWALLET));
+    saveWalletAux.on([](AutoConnectAux &aux, PageArgument &arg) {
+      aux["caption"].value = PARAM_FILE;
+      File param = FlashFS.open(PARAM_FILE, "w");
+
+      if (param)
+      {
+        // save as a loadable set for parameters.
+        initAux.saveElement(param, {"pin", "password"});
+        param.close();
+
+        // read the saved elements again to display.
+        param = FlashFS.open(PARAM_FILE, "r");
+        aux["echo"].value = param.readString();
+        param.close();
+      }
+      else
+      {
+        aux["echo"].value = "Filesystem failed to open.";
+      }
+
+      return String();
+    });
+  }
+
+  /*bool haveKey = true;
+  bool haveCommand = true;*/
 
   //Checks if the user has an account or is forcing a reset
-  haveKey = SPIFFS.exists("/key.txt");
+  /*haveKey = SPIFFS.exists("/key.txt");
   if (haveKey) {
     Serial.println("Key file exists:");
     fs::File keyfile = SPIFFS.open("/key.txt", FILE_READ);
@@ -799,7 +934,7 @@ void startupWallet() {
     enterpin(true);
   } else {
     enterpin(false);
-  }
+  }*/
 }
 
 
@@ -918,7 +1053,7 @@ void loop() {
     loopWatch();
 
   } else {
-    WiFiClient client = server.available();  // listen for incoming clients
+    /*WiFiClient client = server.available();  // listen for incoming clients
 
     if (client) {                     // if you get a client,
       Serial.println("New Client.");  // print a message out the serial port
@@ -949,7 +1084,7 @@ void loop() {
       }
       // close the connection:
       Serial.println("Client Disconnected.");
-    }
+    }*/
 
     lv_task_handler();
     delay(5);
