@@ -24,7 +24,7 @@ fs::SPIFFSFS &FlashFS = SPIFFS;
 #include "freertos/queue.h"
 #include <soc/rtc.h>
 #include "esp_wifi.h"
-
+#include <ArduinoJson.h>
 #include <Electrum.h>
 #include "qrcoded.h"
 #include "gui.h"
@@ -124,7 +124,7 @@ static const char PAGE_INIT[] PROGMEM = R"(
       "name": "save",
       "type": "ACSubmit",
       "value": "Save",
-      "uri": "/saveWallet"
+      "uri": "/save"
     },
     {
       "name": "adjust_width",
@@ -137,7 +137,7 @@ static const char PAGE_INIT[] PROGMEM = R"(
 
 static const char PAGE_SAVEWALLET[] PROGMEM = R"(
 {
-  "uri": "/saveWallet",
+  "uri": "/save",
   "title": "Elements",
   "menu": false,
   "element": [
@@ -437,7 +437,7 @@ static void reset_btn_event_handler(lv_obj_t *obj, lv_event_t event) {
       lv_obj_del(resetBtns);
       lv_obj_del(resetInfo);
       lv_obj_set_pos(main_menu, 0, 0);
-      seedmaker();
+      //seedmaker();
     } else if (btn_index == 1) {
       Serial.println("reset cancelled");
       // cancel reset
@@ -644,6 +644,25 @@ void menu_matrix(void) {
   }
 }*/
 
+// Prints the content of a file to the Serial
+void printFile(const char *filename) {
+  // Open file for reading
+  File file = FlashFS.open(filename);
+  if (!file) {
+    Serial.println(F("Failed to read file"));
+    return;
+  }
+
+  // Extract each characters by one by one
+  while (file.available()) {
+    Serial.print((char)file.read());
+  }
+  Serial.println();
+
+  // Close the file
+  file.close();
+}
+
 //========================================================================
 // Loop over a set of 24 randomly-generated seed words
 //========================================================================
@@ -677,19 +696,25 @@ void seedmaker() {
   {
     seedphrase = seedphrase + " " + seedwords[random(0, 2047)];
   }
+  Serial.println("Created seedphrase " + seedphrase);
   
   File param = FlashFS.open(PARAM_FILE, "w");
   if (param)
   {
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<2500> doc;
+    doc["pin"] = "1234";
+    doc["password"] = "ToTheMoon1";
     doc["seedphrase"] = seedphrase;
     // Serialize JSON to file
     if (serializeJson(doc, param) == 0) {
       Serial.println(F("Failed to write to file"));
     }
+    Serial.println("written seed phrase to file");
   }
 
   param.close();
+
+  printFile(PARAM_FILE);
 }
 
 //========================================================================
@@ -812,6 +837,19 @@ void enterpin() {
   passcode_matrix();
 }
 
+void portalLaunch()
+{
+  ttgo->tft->fillScreen(TFT_BLACK);
+  ttgo->tft->setTextColor(TFT_PURPLE, TFT_BLACK);
+  ttgo->tft->setTextSize(3);
+  ttgo->tft->setCursor(20, 50);
+  ttgo->tft->println("AP LAUNCHED");
+  ttgo->tft->setTextColor(TFT_WHITE, TFT_BLACK);
+  ttgo->tft->setCursor(0, 75);
+  ttgo->tft->setTextSize(2);
+  ttgo->tft->println(" WHEN FINISHED RESET");
+}
+
 //=======================================================================
 
 void startupWallet() {
@@ -825,26 +863,39 @@ void startupWallet() {
 
   // get the saved details and store in global variables
   File paramFile = FlashFS.open(PARAM_FILE, "r");
+  Serial.println("reading PARAM_FILE");
+  printFile(PARAM_FILE);
   if (paramFile)
   {
     StaticJsonDocument<2500> doc;
     DeserializationError error = deserializeJson(doc, paramFile.readString());
 
-    const JsonObject passRoot = doc[0];
+    const JsonObject pinRoot = doc["pin"];
+    char pinChar[64];
+    strlcpy(pinChar, doc["pin"], sizeof(pinChar));
+    pin = String(pinChar);
+    Serial.println("Read pin = " + pin);
+
+    const JsonObject passRoot = doc[1];
     const char *apPasswordChar = passRoot["value"];
     const char *apNameChar = passRoot["name"];
     if (String(apPasswordChar) != "" && String(apNameChar) == "password")
     {
       apPassword = apPasswordChar;
     }
+    Serial.println("Read password = " + apPassword);
 
-    const JsonObject maRoot = doc[1];
-    const char *seedphraseChar = maRoot["value"];
-    seedphrase = seedphraseChar;
+    const JsonObject maRoot = doc["seedphrase"];
+    char seedphraseChar[2500];
+    strlcpy(seedphraseChar, doc["seedphrase"], sizeof(seedphraseChar));
+    seedphrase = String(seedphraseChar);
     if (seedphrase != "")
     {
       needInit = false;
     }
+    Serial.println("Read seedphrase = " + seedphrase);
+  } else {
+    Serial.println("failed to open param file");
   }
 
   paramFile.close();
@@ -863,7 +914,7 @@ void startupWallet() {
     
     // handle access point traffic
     server.on("/", []() {
-      String content = "<h1>Bitwatch</br>Stealth Bitcoin hardware wallet/h1>";
+      String content = "<h1>Bitwatch</br>Stealth Bitcoin hardware wallet</h1>";
       content += AUTOCONNECT_LINK(COG_24);
       server.send(200, "text/html", content);
     });
@@ -872,6 +923,12 @@ void startupWallet() {
     initAux.on([](AutoConnectAux &aux, PageArgument &arg) {
       File param = FlashFS.open(PARAM_FILE, "r");
       if (param)
+      {
+        aux.loadElement(param, {"pin", "password", "seedphrase"});
+        param.close();
+      }
+
+      if (portal.where() == "/newWallet")
       {
         aux.loadElement(param, {"pin", "password", "seedphrase"});
         param.close();
@@ -903,6 +960,26 @@ void startupWallet() {
 
       return String();
     });
+
+    // start access point
+    portalLaunch();
+
+    config.immediateStart = true;
+    config.ticker = true;
+    config.apid = "Bitwatch-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+    config.psk = apPassword;
+    config.menuItems = AC_MENUITEM_CONFIGNEW | AC_MENUITEM_OPENSSIDS | AC_MENUITEM_RESET;
+    config.title = "Bitwatch";
+
+    portal.join({initAux, saveWalletAux});
+    portal.config(config);
+    portal.begin();
+    while (true)
+    {
+      portal.handleClient();
+    }
+  } else {
+    enterpin();
   }
 
   /*bool haveKey = true;
