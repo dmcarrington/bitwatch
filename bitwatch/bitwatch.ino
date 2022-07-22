@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2020 David Carrington
- *  
- * Port of Bowser wallet https://github.com/arcbtc/bowser-bitcoin-hardware-wallet to LILYGO T-Watch
- * 
+   Copyright (c) 2020 David Carrington
+
+   Port of Bowser wallet https://github.com/arcbtc/bowser-bitcoin-hardware-wallet to LILYGO T-Watch
+
 */
 
 #include <WiFi.h>
@@ -437,7 +437,10 @@ static void reset_btn_event_handler(lv_obj_t *obj, lv_event_t event) {
       lv_obj_del(resetBtns);
       lv_obj_del(resetInfo);
       lv_obj_set_pos(main_menu, 0, 0);
-      //seedmaker();
+      
+      // Delete params file and restart
+      FlashFS.remove(PARAM_FILE);
+      esp_restart();
     } else if (btn_index == 1) {
       Serial.println("reset cancelled");
       // cancel reset
@@ -691,29 +694,35 @@ void seedmaker() {
   wordLabel = lv_label_create(lv_scr_act(), NULL);
   lv_obj_align(wordLabel, NULL, LV_ALIGN_CENTER, 0, -60);
   lv_label_set_text(wordLabel, "Word 1");*/
+  // Delete existing file, otherwise the configuration is appended to the file
+  FlashFS.remove(PARAM_FILE);
+  
   seedphrase = seedwords[random(0, 2047)];
   for (int i = 0; i < 23; i++)
   {
     seedphrase = seedphrase + " " + seedwords[random(0, 2047)];
-    Serial.println(seedphrase);
   }
   Serial.println("Created seedphrase " + seedphrase);
   
-  File param = FlashFS.open(PARAM_FILE, "FILE_WRITE");
-  if (param)
+  File file = FlashFS.open(PARAM_FILE, "w+");
+  if (!file)
   {
-    StaticJsonDocument<256> doc;
-    doc["pin"] = "1234";
-    doc["password"] = "ToTheMoon1";
-    doc["seedphrase"] = seedphrase;
-    // Serialize JSON to file
-    if (serializeJson(doc, param) == 0) {
-      Serial.println(F("Failed to write to file"));
-    }
-    Serial.println("written seed phrase to file");
+    Serial.println(F("Failed to create file"));
+    return;
   }
 
-  param.close();
+  StaticJsonDocument<512> doc;
+  doc["pin"] = "1234";
+  doc["password"] = "ToTheMoon1";
+  doc["seedphrase"] = seedphrase;
+  // Serialize JSON to file
+  if (serializeJson(doc, file) == 0) {
+    Serial.println(F("Failed to write to file"));
+  }
+  Serial.println("written seed phrase to file");
+
+
+  file.close();
 
   //printFile(PARAM_FILE);
 }
@@ -854,15 +863,17 @@ void portalLaunch()
 //=======================================================================
 
 void startupWallet() {
-  FlashFS.begin(FORMAT_ON_FAIL);
-  SPIFFS.begin(true);
+  //FlashFS.begin(FORMAT_ON_FAIL);
+  if(!SPIFFS.begin(true)) {
+    Serial.println("An error has occurred while mounting SPIFFS");
+  }
 
   bool needInit = true;
 
   // get the saved details and store in global variables
   File paramFile = FlashFS.open(PARAM_FILE, "r");
   Serial.println("reading PARAM_FILE");
-  //printFile(PARAM_FILE);
+  
   if (paramFile)
   {
     StaticJsonDocument<256> doc;
@@ -871,8 +882,7 @@ void startupWallet() {
     {
       Serial.println("Error decoding param file, will recreate");
     } else {
-    
-
+      printFile(PARAM_FILE);
       const JsonObject pinRoot = doc["pin"];
       char pinChar[64];
       strlcpy(pinChar, doc["pin"], sizeof(pinChar));
