@@ -82,8 +82,8 @@ lv_obj_t *main_menu = NULL;
 
 
 // custom access point pages
-static const char PAGE_RESTORE[] PROGMEM = R"(
-)";
+/*static const char PAGE_RESTORE[] PROGMEM = R"(
+)";*/
 
 static const char PAGE_INIT[] PROGMEM = R"(
 {
@@ -101,19 +101,17 @@ static const char PAGE_INIT[] PROGMEM = R"(
       "name": "pin",
       "type": "ACInput",
       "label": "PIN code for Bitwatch wallet",
-      "value": "1234"
+      "apply": "number"
     },
     {
       "name": "password",
       "type": "ACInput",
-      "label": "Password for Bitwatch AP WiFi",
-      "value": "ToTheMoon1"
+      "label": "Password for Bitwatch AP WiFi"
     },
     {
       "name": "seedphrase",
       "type": "ACInput",
-      "label": "Wallet Seed Phrase",
-      "value": "seedphrase"
+      "label": "Wallet Seed Phrase"
     },
     {
       "name": "load",
@@ -168,14 +166,14 @@ static const char PAGE_SAVEWALLET[] PROGMEM = R"(
 }
 )";
 
-static const char PAGE_VIEWWALLET[] PROGMEM = R"(
+/*static const char PAGE_VIEWWALLET[] PROGMEM = R"(
 )";
 
 static const char PAGE_SUBMITTX[] PROGMEM = R"(
 )";
 
 static const char PAGE_SIGNEDTX[] PROGMEM = R"(
-)";
+)";*/
 
 // portal and config
 WebServerClass server;
@@ -940,7 +938,6 @@ void startupWallet() {
       File param = FlashFS.open(PARAM_FILE, "r");
       if (param)
       {
-        Serial.println("loading params for initAux");
         aux.loadElement(param, {"pin", "password", "seedphrase"});
         param.close();
       } else {
@@ -952,11 +949,8 @@ void startupWallet() {
         File param = FlashFS.open(PARAM_FILE, "r");
         if (param)
         {
-          Serial.println("loading params for initAux - 2");
           aux.loadElement(param, {"pin", "password", "seedphrase"});
           param.close();
-        }else {
-          Serial.println("Failed to open params for initAux");
         }
       }
 
@@ -971,13 +965,14 @@ void startupWallet() {
       if (param)
       {
         // save as a loadable set for parameters.
-        initAux.saveElement(param, {"pin", "password"});
+        initAux.saveElement(param, {"pin", "password", "seedphrase"});
         param.close();
 
         // read the saved elements again to display.
         param = FlashFS.open(PARAM_FILE, "r");
         aux["echo"].value = param.readString();
         param.close();
+        printFile(PARAM_FILE);
       }
       else
       {
