@@ -710,20 +710,67 @@ void seedmaker() {
     return;
   }
 
-  StaticJsonDocument<512> doc;
+  /*StaticJsonDocument<512> doc;
   doc["pin"] = "1234";
   doc["password"] = "ToTheMoon1";
   doc["seedphrase"] = seedphrase;
   // Serialize JSON to file
   if (serializeJson(doc, file) == 0) {
     Serial.println(F("Failed to write to file"));
+  }*/
+
+  DynamicJsonDocument doc(1024);
+
+  doc[0]["name"] = "pin";
+  doc[0]["type"] = "ACInput";
+  doc[0]["value"] = "1234";
+  doc[0]["label"] = "PIN code for Bitwatch wallet";
+  doc[0]["pattern"] = "";
+  doc[0]["placeholder"] = "";
+  doc[0]["style"] = "";
+  doc[0]["apply"] = "number";
+
+  doc[1]["name"] = "password";
+  doc[1]["type"] = "ACInput";
+  doc[1]["value"] = "ToTheMoon1";
+  doc[1]["label"] = "Password for Bitwatch AP WiFi";
+  doc[1]["pattern"] = "";
+  doc[1]["placeholder"] = "";
+  doc[1]["style"] = "";
+  doc[1]["apply"] = "text";
+  
+  doc[2]["name"] = "seedphrase";
+  doc[2]["type"] = "ACInput";
+  doc[2]["value"] = seedphrase;
+  doc[2]["label"] = "Wallet Seed Phrase";
+  doc[2]["pattern"] = "";
+  doc[2]["placeholder"] = "";
+  doc[2]["style"] = "";
+  doc[2]["apply"] = "text";
+  
+  if (serializeJson(doc, file) == 0) {
+    Serial.println(F("Failed to write to file"));
   }
+  
+
+  /*const int capacity = JSON_ARRAY_SIZE(3) + 3*JSON_OBJECT_SIZE(2);
+  StaticJsonDocument<capacity> doc;
+  JsonArray arr = doc.to<JsonArray>();
+  String json = "[{\"name\":\"pin\",\"value\":\"1234\"},{\"name\":\"password\",\"value\":\"ToTheMoon1\"},{\"name\":\"seedphrase\",\"value\":" + seedphrase + "\"}]";
+  String seedphrase = "{\"name\":\"seedphrase\",\"value\":" + seedphrase + "\"}";
+  arr.add("{\"name\":\"pin\",\"value\":\"1234\"}");
+  arr.add("{\"name\":\"password\",\"value\":\"ToTheMoon1\"}");
+  arr.add(seedphrase);
+ if (serializeJson(doc, file) == 0) {
+    Serial.println(F("Failed to write to file"));
+  }*/
+  
   Serial.println("written seed phrase to file");
 
 
   file.close();
 
-  //printFile(PARAM_FILE);
+  printFile(PARAM_FILE);
 }
 
 //========================================================================
@@ -869,6 +916,9 @@ void startupWallet() {
 
   bool needInit = true;
 
+  // uncomment if PARAM_FILE gets corrupted
+  FlashFS.remove(PARAM_FILE);
+
   // get the saved details and store in global variables
   File paramFile = FlashFS.open(PARAM_FILE, "r");
   Serial.println("reading PARAM_FILE");
@@ -882,7 +932,7 @@ void startupWallet() {
       Serial.println("Error decoding param file, will recreate");
     } else {
       printFile(PARAM_FILE);
-      const JsonObject pinRoot = doc["pin"];
+      const JsonObject pinRoot = doc[0]; //doc["pin"];
       char pinChar[64];
       strlcpy(pinChar, doc["pin"], sizeof(pinChar));
       pin = String(pinChar);
