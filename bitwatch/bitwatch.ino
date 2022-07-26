@@ -56,7 +56,7 @@ lv_obj_t *pinPad = NULL;
 
 // wallet elements
 String privatekey;
-String pubkey;
+String pubkey = "";
 
 // Global variables read from config file
 String pin;
@@ -167,10 +167,7 @@ static const char PAGE_SAVEWALLET[] PROGMEM = R"(
 }
 )";
 
-/*static const char PAGE_VIEWWALLET[] PROGMEM = R"(
-)";
-
-static const char PAGE_SUBMITTX[] PROGMEM = R"(
+/*static const char PAGE_SUBMITTX[] PROGMEM = R"(
 )";
 
 static const char PAGE_SIGNEDTX[] PROGMEM = R"(
@@ -182,6 +179,7 @@ AutoConnect portal(server);
 AutoConnectConfig config;
 AutoConnectAux restoreAux;
 AutoConnectAux initAux;
+AutoConnectAux zpubAux;
 AutoConnectAux saveWalletAux;
 AutoConnectAux viewWalletAux;
 AutoConnectAux submittxAux;
@@ -265,9 +263,6 @@ void exportZpub() {
   int str_len = pubkey.length() + 1;
   char char_array[str_len];
   pubkey.toCharArray(char_array, str_len);
-  fs::File file = FlashFS.open("/bitwatch.txt", FILE_WRITE);
-  file.print(char_array);
-  file.close();
 
   ttgo->tft->fillScreen(TFT_BLACK);
   showAddress(pubkey);
@@ -278,8 +273,6 @@ void exportZpub() {
 
   ttgo->tft->setTextSize(1);
   ttgo->tft->setCursor(0, 220);
-  //String msg = "Saved to \n" + ipaddress + "/bitwatch.txt";
-  //ttgo->tft->println(msg.c_str());
   delay(10000);
 }
 
@@ -559,7 +552,7 @@ static void menu_event_handler(lv_obj_t *obj, lv_event_t event) {
         break;
       case (3):
         Serial.println("Show Seed");
-        //showseed();
+        startConfigPortal();
         break;
       case (4):
         Serial.println("Wipe Device");
@@ -860,6 +853,92 @@ void portalLaunch()
   ttgo->tft->println(" WHEN FINISHED RESET");
 }
 
+void startConfigPortal()
+{
+  // handle access point traffic
+    server.on("/", []() {
+      String content = "<h1>Bitwatch</br>Stealth Bitcoin hardware wallet</h1>";
+      content += AUTOCONNECT_LINK(COG_24);
+      server.send(200, "text/html", content);
+    });
+
+    initAux.load(FPSTR(PAGE_INIT));
+    initAux.on([](AutoConnectAux &aux, PageArgument &arg) {
+      File param = FlashFS.open(PARAM_FILE, "r");
+      if (param)
+      {
+        aux.loadElement(param, {"pin", "password", "seedphrase"});
+        param.close();
+      } else {
+        Serial.println("Failed to open params for initAux");
+      }
+
+      if (portal.where() == "/newwallet")
+      {
+        File param = FlashFS.open(PARAM_FILE, "r");
+        if (param)
+        {
+          aux.loadElement(param, {"pin", "password", "seedphrase"});
+          param.close();
+        }
+      }
+
+      return String();
+    });
+
+    String zpubPage = "{\"title\": \"ZPUB\",\"uri\": \"/zpub\",\"menu\": true,\"element\": [{\"name\": \"zpub\",\"type\": \"ACText\", \"value\": \"" + pubkey + "\"}]}";
+    zpubAux.load(FPSTR(zpubPage.c_str()));
+    saveWalletAux.on([](AutoConnectAux &aux, PageArgument &arg) {
+      aux["caption"].value = "ZPUB";
+
+      return String();
+    });
+    
+
+    saveWalletAux.load(FPSTR(PAGE_SAVEWALLET));
+    saveWalletAux.on([](AutoConnectAux &aux, PageArgument &arg) {
+      aux["caption"].value = PARAM_FILE;
+      File param = FlashFS.open(PARAM_FILE, "w");
+
+      if (param)
+      {
+        // save as a loadable set for parameters.
+        initAux.saveElement(param, {"pin", "password", "seedphrase"});
+        param.close();
+
+        // read the saved elements again to display.
+        param = FlashFS.open(PARAM_FILE, "r");
+        aux["echo"].value = param.readString();
+        param.close();
+        printFile(PARAM_FILE);
+      }
+      else
+      {
+        aux["echo"].value = "Filesystem failed to open.";
+      }
+
+      return String();
+    });
+
+    // start access point
+    portalLaunch();
+
+    config.immediateStart = true;
+    config.ticker = true;
+    config.apid = "Bitwatch-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+    config.psk = apPassword;
+    config.menuItems = AC_MENUITEM_CONFIGNEW | AC_MENUITEM_OPENSSIDS | AC_MENUITEM_RESET;
+    config.title = "Bitwatch";
+
+    portal.join({initAux, zpubAux, saveWalletAux});
+    portal.config(config);
+    portal.begin();
+    while (true)
+    {
+      portal.handleClient();
+    }
+}
+
 //=======================================================================
 
 void startupWallet() {
@@ -908,13 +987,13 @@ void startupWallet() {
       if (seedphrase != "")
       {
         needInit = false;
+        
       }
       Serial.println("Read seedphrase = " + seedphrase);
     }
   }else {
       Serial.println("failed to open param file");
   }
-  
 
   paramFile.close();
 
@@ -930,79 +1009,7 @@ void startupWallet() {
     // Initialise a new wallet seed phrase
     seedmaker();
     
-    // handle access point traffic
-    server.on("/", []() {
-      String content = "<h1>Bitwatch</br>Stealth Bitcoin hardware wallet</h1>";
-      content += AUTOCONNECT_LINK(COG_24);
-      server.send(200, "text/html", content);
-    });
-
-    initAux.load(FPSTR(PAGE_INIT));
-    initAux.on([](AutoConnectAux &aux, PageArgument &arg) {
-      File param = FlashFS.open(PARAM_FILE, "r");
-      if (param)
-      {
-        aux.loadElement(param, {"pin", "password", "seedphrase"});
-        param.close();
-      } else {
-        Serial.println("Failed to open params for initAux");
-      }
-
-      if (portal.where() == "/newwallet")
-      {
-        File param = FlashFS.open(PARAM_FILE, "r");
-        if (param)
-        {
-          aux.loadElement(param, {"pin", "password", "seedphrase"});
-          param.close();
-        }
-      }
-
-      return String();
-    });
-
-    saveWalletAux.load(FPSTR(PAGE_SAVEWALLET));
-    saveWalletAux.on([](AutoConnectAux &aux, PageArgument &arg) {
-      aux["caption"].value = PARAM_FILE;
-      File param = FlashFS.open(PARAM_FILE, "w");
-
-      if (param)
-      {
-        // save as a loadable set for parameters.
-        initAux.saveElement(param, {"pin", "password", "seedphrase"});
-        param.close();
-
-        // read the saved elements again to display.
-        param = FlashFS.open(PARAM_FILE, "r");
-        aux["echo"].value = param.readString();
-        param.close();
-        printFile(PARAM_FILE);
-      }
-      else
-      {
-        aux["echo"].value = "Filesystem failed to open.";
-      }
-
-      return String();
-    });
-
-    // start access point
-    portalLaunch();
-
-    config.immediateStart = true;
-    config.ticker = true;
-    config.apid = "Bitwatch-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-    config.psk = apPassword;
-    config.menuItems = AC_MENUITEM_CONFIGNEW | AC_MENUITEM_OPENSSIDS | AC_MENUITEM_RESET;
-    config.title = "Bitwatch";
-
-    portal.join({initAux, saveWalletAux});
-    portal.config(config);
-    portal.begin();
-    while (true)
-    {
-      portal.handleClient();
-    }
+    startConfigPortal();
   } else {
     enterpin();
   }
@@ -1187,7 +1194,7 @@ void loop() {
       // close the connection:
       Serial.println("Client Disconnected.");
     }*/
-
+  portal.handleClient();
     lv_task_handler();
     delay(5);
   }
