@@ -37,6 +37,7 @@ fs::SPIFFSFS &FlashFS = SPIFFS;
 
 
 #define PARAM_FILE "/elements.json"
+#define PARAM_JSON_SIZE 1024
 #define KEY_FILE "/thekey.txt"
 
 // watch instance
@@ -669,30 +670,7 @@ void printFile(const char *filename) {
 // Loop over a set of 24 randomly-generated seed words
 //========================================================================
 void seedmaker() {
-  /*ttgo->tft->fillScreen(TFT_BLACK);
-  ttgo->tft->setCursor(0, 100);
-  ttgo->tft->setTextColor(TFT_GREEN);
-  ttgo->tft->setTextSize(2);
-  ttgo->tft->println("   Write seed words");
-  ttgo->tft->println("   somewhere safe!");
-  delay(6000);
 
-  seedBtn = lv_btn_create(lv_scr_act(), NULL);
-  lv_obj_set_event_cb(seedBtn, seedmaker_cb);
-  lv_obj_set_size(seedBtn, 200, 40);
-  lv_obj_align(seedBtn, NULL, LV_ALIGN_CENTER, 0, 90);
-  btnLabel = lv_label_create(seedBtn, NULL);
-  lv_label_set_text(btnLabel, "Next");
-
-  seedWord = seedwords[random(0, 2047)];
-  seedgeneratestr = seedWord;
-  seedLabel = lv_label_create(lv_scr_act(), NULL);
-  lv_obj_align(seedLabel, NULL, LV_ALIGN_CENTER, 0, -20);
-  lv_label_set_text(seedLabel, seedWord.c_str());
-
-  wordLabel = lv_label_create(lv_scr_act(), NULL);
-  lv_obj_align(wordLabel, NULL, LV_ALIGN_CENTER, 0, -60);
-  lv_label_set_text(wordLabel, "Word 1");*/
   // Delete existing file, otherwise the configuration is appended to the file
   FlashFS.remove(PARAM_FILE);
   
@@ -710,16 +688,8 @@ void seedmaker() {
     return;
   }
 
-  /*StaticJsonDocument<512> doc;
-  doc["pin"] = "1234";
-  doc["password"] = "ToTheMoon1";
-  doc["seedphrase"] = seedphrase;
-  // Serialize JSON to file
-  if (serializeJson(doc, file) == 0) {
-    Serial.println(F("Failed to write to file"));
-  }*/
-
-  DynamicJsonDocument doc(1024);
+  // Create a placeholder param file matching pattern used by AutoConnect
+  DynamicJsonDocument doc(PARAM_JSON_SIZE);
 
   doc[0]["name"] = "pin";
   doc[0]["type"] = "ACInput";
@@ -750,27 +720,11 @@ void seedmaker() {
   
   if (serializeJson(doc, file) == 0) {
     Serial.println(F("Failed to write to file"));
+  } else {
+    Serial.println("written seed phrase to file");
   }
   
-
-  /*const int capacity = JSON_ARRAY_SIZE(3) + 3*JSON_OBJECT_SIZE(2);
-  StaticJsonDocument<capacity> doc;
-  JsonArray arr = doc.to<JsonArray>();
-  String json = "[{\"name\":\"pin\",\"value\":\"1234\"},{\"name\":\"password\",\"value\":\"ToTheMoon1\"},{\"name\":\"seedphrase\",\"value\":" + seedphrase + "\"}]";
-  String seedphrase = "{\"name\":\"seedphrase\",\"value\":" + seedphrase + "\"}";
-  arr.add("{\"name\":\"pin\",\"value\":\"1234\"}");
-  arr.add("{\"name\":\"password\",\"value\":\"ToTheMoon1\"}");
-  arr.add(seedphrase);
- if (serializeJson(doc, file) == 0) {
-    Serial.println(F("Failed to write to file"));
-  }*/
-  
-  Serial.println("written seed phrase to file");
-
-
   file.close();
-
-  printFile(PARAM_FILE);
 }
 
 //========================================================================
@@ -916,8 +870,8 @@ void startupWallet() {
 
   bool needInit = true;
 
-  // uncomment if PARAM_FILE gets corrupted
-  FlashFS.remove(PARAM_FILE);
+  // uncomment if PARAM_FILE gets corrupted or needs to be removed for testing
+  //FlashFS.remove(PARAM_FILE);
 
   // get the saved details and store in global variables
   File paramFile = FlashFS.open(PARAM_FILE, "r");
@@ -925,16 +879,16 @@ void startupWallet() {
   
   if (paramFile)
   {
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<PARAM_JSON_SIZE> doc;
     DeserializationError error = deserializeJson(doc, paramFile.readString());
     if(error) 
     {
       Serial.println("Error decoding param file, will recreate");
     } else {
       printFile(PARAM_FILE);
-      const JsonObject pinRoot = doc[0]; //doc["pin"];
+      const JsonObject pinRoot = doc[0];
       char pinChar[64];
-      strlcpy(pinChar, doc["pin"], sizeof(pinChar));
+      strlcpy(pinChar, pinRoot["value"], sizeof(pinChar));
       pin = String(pinChar);
       Serial.println("Read pin = " + pin);
   
@@ -947,9 +901,9 @@ void startupWallet() {
       }
       Serial.println("Read password = " + apPassword);
   
-      const JsonObject maRoot = doc["seedphrase"];
+      const JsonObject seedRoot = doc[2];
       char seedphraseChar[2500];
-      strlcpy(seedphraseChar, doc["seedphrase"], sizeof(seedphraseChar));
+      strlcpy(seedphraseChar, seedRoot["value"], sizeof(seedphraseChar));
       seedphrase = String(seedphraseChar);
       if (seedphrase != "")
       {
