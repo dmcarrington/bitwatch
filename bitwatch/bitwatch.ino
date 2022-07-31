@@ -34,11 +34,9 @@ fs::SPIFFSFS &FlashFS = SPIFFS;
 #include "seedwords.h"
 #include "watch.h"
 
-
-
 #define PARAM_FILE "/elements.json"
 #define PARAM_JSON_SIZE 1024
-#define KEY_FILE "/thekey.txt"
+#define PSBT_FILE "/psbt.json"
 
 // watch instance
 TTGOClass *ttgo;
@@ -63,6 +61,7 @@ String pin;
 String apPassword = "ToTheMoon1"; //default WiFi AP password
 String seedphrase;
 String psbt;
+String signedTransaction;
 
 // PIN generation / entry UI elements
 String pincode = "";
@@ -72,7 +71,7 @@ lv_obj_t *label1 = NULL;
 // Transaction signing
 lv_obj_t *txinfo = NULL;
 lv_obj_t *signTxBtns = NULL;
-ElectrumTx tx;
+
 
 // Wallet reset UI
 lv_obj_t *resetBtns = NULL;
@@ -83,9 +82,7 @@ lv_obj_t *main_menu = NULL;
 
 
 // custom access point pages
-/*static const char PAGE_RESTORE[] PROGMEM = R"(
-)";*/
-
+// Init / Restore wallet
 static const char PAGE_INIT[] PROGMEM = R"(
 {
   "uri": "/newwallet",
@@ -135,6 +132,7 @@ static const char PAGE_INIT[] PROGMEM = R"(
  }
 )";
 
+// Save wallet
 static const char PAGE_SAVEWALLET[] PROGMEM = R"(
 {
   "uri": "/save",
@@ -167,10 +165,57 @@ static const char PAGE_SAVEWALLET[] PROGMEM = R"(
 }
 )";
 
-/*static const char PAGE_SUBMITTX[] PROGMEM = R"(
+static const char PAGE_ENTERPSBT[] PROGMEM = R"(
+  "uri": "/enterpsbt",
+  "title": "Submit PSBT",
+  "menu": true,
+  "element": [
+    {
+      "name": "text",
+      "type": "ACText",
+      "value": "Submit PSBT",
+      "style": "font-family:Arial;font-size:16px;font-weight:400;color:#191970;margin-botom:15px;"
+    },
+    {
+      "name": "psbt",
+      "type": "ACInput",
+      "label": "Paste PSBT here"
+    }
 )";
 
-static const char PAGE_SIGNEDTX[] PROGMEM = R"(
+static const char PAGE_SAVEPSBT[] PROGMEM = R"(
+{
+  "uri": "/savepsbt",
+  "title": "PSBT",
+  "menu": false,
+  "element": [
+    {
+      "name": "caption",
+      "type": "ACText",
+      "format": "PSBT has been saved to %s",
+      "style": "font-family:Arial;font-size:18px;font-weight:400;color:#191970"
+    },
+    {
+      "name": "validated",
+      "type": "ACText",
+      "style": "color:red"
+    },
+    {
+      "name": "echo",
+      "type": "ACText",
+      "style": "font-family:monospace;font-size:small;white-space:pre;"
+    },
+    {
+      "name": "ok",
+      "type": "ACSubmit",
+      "value": "OK",
+      "uri": "/signedpsbt"
+    }
+  ]
+}
+)";
+
+/*static const char PAGE_SIGNEDTX[] PROGMEM = R"(
 )";*/
 
 // portal and config
@@ -184,24 +229,26 @@ AutoConnectAux saveWalletAux;
 AutoConnectAux viewWalletAux;
 AutoConnectAux submittxAux;
 AutoConnectAux signedtxAux;
+AutoConnectAux savepsbtAux;
 
-//========================================================================
-// Start a wireless access point for us to connect to to read our files
-//========================================================================
-/*void startWebserver(void) {
+// Prints the content of a file to the Serial
+void printFile(const char *filename) {
+  // Open file for reading
+  File file = FlashFS.open(filename);
+  if (!file) {
+    Serial.println(F("Failed to read file"));
+    return;
+  }
+
+  // Extract each characters by one by one
+  while (file.available()) {
+    Serial.print((char)file.read());
+  }
   Serial.println();
-  Serial.println("Configuring access point...");
 
-  // You can remove the password parameter if you want the AP to be open.
-  WiFi.softAP(ssid, password);
-  IPAddress myIP = WiFi.softAPIP();
-  ipaddress = myIP.toString();
-  Serial.print("AP IP address: ");
-  Serial.println(myIP);
-  server.begin();
-
-  Serial.println("Server started");
-}*/
+  // Close the file
+  file.close();
+}
 
 //========================================================================
 // Show an address as a QR code
@@ -239,22 +286,6 @@ void showAddress(String XXX) {
     }
   }
 }
-
-//========================================================================
-// Show seed words
-//========================================================================
-/*void showseed() {
-  ttgo->tft->fillScreen(TFT_BLACK);
-  ttgo->tft->setCursor(0, 20);
-  ttgo->tft->setTextSize(3);
-  ttgo->tft->setTextColor(TFT_GREEN);
-  ttgo->tft->println("  SHOW SEED");
-  ttgo->tft->println("");
-  ttgo->tft->setTextColor(TFT_BLUE);
-  ttgo->tft->setTextSize(2);
-  ttgo->tft->println(savedseed);
-  delay(30000);
-}*/
 
 //========================================================================
 // Show ZPUB as QR code and export to SPIFFS
@@ -314,108 +345,126 @@ void displayPubkey() {
 }
 
 //========================================================================
-// Repond to confirming a transaction, or cancel signing
+// Signs a PSBT, returns signed transaction for broadcast
 //========================================================================
-static void sign_tx_event_handler(lv_obj_t *obj, lv_event_t event) {
-  if (event == LV_EVENT_CLICKED) {
-    unsigned int btn_index = lv_btnmatrix_get_active_btn(obj);
-    if (btn_index == 0) {
-      // "sign" button pressed
-      lv_obj_del(txinfo);
-      lv_obj_del(signTxBtns);
-
-      Serial.println(seedphrase);
-      HDPrivateKey hd(seedphrase, pin);
-      HDPrivateKey account = hd.derive("m/84'/0'/0'/");
-      Serial.println(account);
-
-      tx.sign(account);
-      ttgo->tft->fillScreen(TFT_BLACK);
-      ttgo->tft->setCursor(0, 20);
-      ttgo->tft->setTextSize(2);
-
-      String signedtx = tx;
-      Serial.println("Signedtx: ");
-      Serial.print(signedtx);
-      int str_len = signedtx.length() + 1;
-      char char_array[str_len];
-      signedtx.toCharArray(char_array, str_len);
-      fs::File file = FlashFS.open("/bitwatch.txt", FILE_WRITE);
-      file.println(signedtx.c_str());
-      file.close();
-
-      ttgo->tft->fillScreen(TFT_BLACK);
-      ttgo->tft->setCursor(0, 100);
-      ttgo->tft->setTextSize(2);
-
-      //String msg = "Saved to \n" + ipaddress + "/bitwatch.txt";
-      //ttgo->tft->println(msg.c_str());
-      //ttgo->tft->println("");
-      //lv_obj_set_pos(main_menu, 0, 0);
-      delay(3000);
-
-    } else if (btn_index == 1) {
-      // "cancel button pressed
-      lv_obj_del(txinfo);
-      lv_obj_del(signTxBtns);
-      lv_obj_set_pos(main_menu, 0, 0);
-    }
+String signTransaction(String psbt) {
+  ElectrumTx tx;
+  int len_parsed = tx.parse(psbt);
+  if (len_parsed == 0) {
+    Serial.println("Failed to parse tx " + psbt);
+    return "";
   }
-}
+  Serial.println(seedphrase);
+  HDPrivateKey hd(seedphrase, pin);
+  HDPrivateKey account = hd.derive("m/84'/0'/0'/");
+  Serial.println(account);
 
-static const char *sign_tx_map[] = { "Sign", "Cancel", "" };
+  tx.sign(account);
+  return tx;
+}
 
 //========================================================================
 // Submenu for signing a transaction
 //========================================================================
 void signTransaction() {
-  //if (sdcommand.substring(0, 4) == "SIGN") {
-    String eltx = psbt; //sdcommand.substring(5, sdcommand.length() + 1);
-    Serial.println(eltx);
+  server.on("/", []() {
+      String content = "<h1>Bitwatch</br>Stealth Bitcoin hardware wallet</h1>";
+      content += AUTOCONNECT_LINK(COG_24);
+      server.send(200, "text/html", content);
+    });
 
-    ttgo->tft->fillScreen(TFT_BLACK);
-    ttgo->tft->setCursor(0, 20);
-    ttgo->tft->setTextSize(3);
-    ttgo->tft->setTextColor(TFT_GREEN);
-    ttgo->tft->println("");
-    ttgo->tft->setCursor(0, 90);
-    ttgo->tft->println(" Bwahahahaha!");
-    ttgo->tft->println("");
-    ttgo->tft->println(" Transaction");
-    ttgo->tft->println(" found");
+    submittxAux.load(FPSTR(PAGE_ENTERPSBT));
+    submittxAux.on([](AutoConnectAux &aux, PageArgument &arg) {
+      File file = FlashFS.open(PSBT_FILE, "r");
+      if (file)
+      {
+        aux.loadElement(file, "psbt");
+        file.close();
+      } else {
+        Serial.println("Failed to open params for submittxAux");
+      }
 
-    delay(3000);
+      if (portal.where() == "/enterpsbt")
+      {
+        File file = FlashFS.open(PSBT_FILE, "r");
+        if (file)
+        {
+          aux.loadElement(file, "psbt");
+          file.close();
+        }
+      }
 
-    // hide the main menu
-    lv_obj_set_pos(main_menu, -500, 0);
+      return String();
+    });
 
-    int len_parsed = tx.parse(eltx);
-    if (len_parsed == 0) {
-      ttgo->tft->println("Can't parse tx");
-      delay(3000);
-      lv_obj_set_pos(main_menu, 0, 0);
-      Serial.println("no valid transaction found");
-      return;
+    String signedTransactionPage = "{\"title\": \"Signed Transaction\",\"uri\": \"/signedpsbt\",\"menu\": true,\"element\": [{\"name\": \"transaction\",\"type\": \"ACText\", \"value\": \"" + signedTransaction + "\"}]}";
+    signedtxAux.load(FPSTR(signedTransactionPage.c_str()));
+    savepsbtAux.on([](AutoConnectAux &aux, PageArgument &arg) {
+      aux["caption"].value = "Signed Transaction";
+
+      return String();
+    });
+    
+
+    savepsbtAux.load(FPSTR(PAGE_SAVEPSBT));
+    savepsbtAux.on([](AutoConnectAux &aux, PageArgument &arg) {
+      aux["caption"].value = PSBT_FILE;
+      File file = FlashFS.open(PSBT_FILE, "w");
+
+      if (file)
+      {
+        // save as a loadable set for parameters.
+        submittxAux.saveElement(file, {"psbt"});
+        //file.close();
+
+        // read value back from file and actually sign the transaction
+        StaticJsonDocument<PARAM_JSON_SIZE> doc;
+        DeserializationError error = deserializeJson(doc, file.readString());
+        if(error) 
+        {
+          Serial.println("Error decoding psbt file!");
+        } else {
+          //printFile(PSBT_FILE);
+          const JsonObject psbtRoot = doc[0];
+          // TODO use max size of PSBT
+          char psbtChar[64];
+          strlcpy(psbtChar, psbtRoot["value"], sizeof(psbtChar));
+          psbt = String(psbtChar);
+          Serial.println("Read psbt = " + psbt);
+          signedTransaction = signTransaction(psbt);
+
+          // read the saved elements again to display.
+          file = FlashFS.open(PSBT_FILE, "r");
+          aux["echo"].value = file.readString();
+          file.close();
+          printFile(PSBT_FILE);
+        }
+      }
+      else
+      {
+        aux["echo"].value = "Filesystem failed to open.";
+      }
+
+      return String();
+    });
+
+    // start access point
+    portalLaunch();
+
+    config.immediateStart = true;
+    config.ticker = true;
+    config.apid = "Bitwatch-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+    config.psk = apPassword;
+    config.menuItems = AC_MENUITEM_CONFIGNEW | AC_MENUITEM_OPENSSIDS | AC_MENUITEM_RESET;
+    config.title = "Bitwatch";
+
+    portal.join({submittxAux, signedtxAux, savepsbtAux});
+    portal.config(config);
+    portal.begin();
+    while (true)
+    {
+      portal.handleClient();
     }
-    String txnLabel = "";
-    Serial.println(tx.toString());
-    for (int i = 0; i < tx.tx.outputsNumber; i++) {
-      txnLabel = txnLabel + (tx.tx.txOuts[i].address()) + "\n-> ";
-      // Serial can't print uint64_t, so convert to int
-      txnLabel = txnLabel + (int(tx.tx.txOuts[i].amount));
-      txnLabel = txnLabel + " sat\n";
-    }
-    Serial.println(txnLabel);
-    txinfo = lv_label_create(lv_scr_act(), NULL);
-    lv_obj_align(txinfo, NULL, LV_ALIGN_CENTER, -100, -100);
-    lv_label_set_text(txinfo, txnLabel.c_str());
-
-    signTxBtns = lv_btnmatrix_create(lv_scr_act(), NULL);
-    lv_btnmatrix_set_map(signTxBtns, sign_tx_map);
-    lv_obj_set_size(signTxBtns, 240, 40);
-    lv_obj_align(signTxBtns, NULL, LV_ALIGN_CENTER, 0, 100);
-    lv_obj_set_event_cb(signTxBtns, sign_tx_event_handler);
-  //}
 }
 
 //========================================================================
@@ -463,75 +512,6 @@ void confirmReset() {
 }
 
 //========================================================================
-// handle restore confirmation
-//========================================================================
-/*static void restore_btn_event_handler(lv_obj_t *obj, lv_event_t event) {
-  if (event == LV_EVENT_CLICKED) {
-    unsigned int btn_index = lv_btnmatrix_get_active_btn(obj);
-    if (btn_index == 0) {
-      Serial.println("restore confirmed");
-      // confirm reset
-      lv_obj_del(restoreBtns);
-      lv_obj_del(restoreInfo);
-      ttgo->tft->fillScreen(TFT_BLACK);
-      ttgo->tft->setCursor(0, 100);
-      ttgo->tft->setTextColor(TFT_GREEN);
-      ttgo->tft->setTextSize(2);
-      ttgo->tft->println("  Saving seed...");
-      delay(2000);
-      fs::File file = SPIFFS.open("/key.txt", FILE_WRITE);
-      file.print(theSeed + "\n");
-      file.close();
-      fs::File outfile = SPIFFS.open("/bitwatch.txt", FILE_WRITE);
-      outfile.print("");
-      outfile.close();
-      lv_obj_set_pos(main_menu, 0, 0);
-    } else if (btn_index == 1) {
-      Serial.println("restore cancelled");
-      // cancel reset
-      lv_obj_del(restoreBtns);
-      lv_obj_del(restoreInfo);
-      lv_obj_set_pos(main_menu, 0, 0);
-    }
-  }
-}
-
-static const char *restore_btn_map[] = { "Restore", "Cancel", "" };*/
-
-//========================================================================
-// Sub menu to confirm restore
-//========================================================================
-/*void confirmRestoreFromSeed() {
-  lv_obj_set_pos(main_menu, -500, 0);
-  restoreInfo = lv_label_create(lv_scr_act(), NULL);
-  lv_obj_align(restoreInfo, NULL, LV_ALIGN_CENTER, -60, -60);
-  lv_label_set_text(restoreInfo, "Device will be wiped\nthen restored from seed,\nare you sure?");
-
-  restoreBtns = lv_btnmatrix_create(lv_scr_act(), NULL);
-  lv_btnmatrix_set_map(restoreBtns, reset_btn_map);
-  lv_obj_set_size(restoreBtns, 240, 40);
-  lv_obj_align(restoreBtns, NULL, LV_ALIGN_CENTER, 0, 100);
-  lv_obj_set_event_cb(restoreBtns, restore_btn_event_handler);
-}*/
-
-//========================================================================
-// attempt to restore from phrase stored in SPIFFS
-//========================================================================
-void restoreFromSeed() {
-  /*if (sdcommand.substring(0, 7) == "RESTORE") {
-    theSeed = sdcommand.substring(8, sdcommand.length());
-    confirmRestoreFromSeed();
-  } else {*/
-    ttgo->tft->fillScreen(TFT_BLACK);
-    ttgo->tft->setTextSize(2);
-    ttgo->tft->setCursor(0, 90);
-    ttgo->tft->setTextColor(TFT_RED);
-    ttgo->tft->println("'RESTORE *seed phrase*' not found on SPIFFS");
-  /*  delay(3000);
-  }*/
-}
-
-//========================================================================
 // Handle menu button array presses
 //========================================================================
 static void menu_event_handler(lv_obj_t *obj, lv_event_t event) {
@@ -551,7 +531,7 @@ static void menu_event_handler(lv_obj_t *obj, lv_event_t event) {
         exportZpub();
         break;
       case (3):
-        Serial.println("Show Seed");
+        Serial.println("Settings");
         startConfigPortal();
         break;
       case (4):
@@ -559,8 +539,7 @@ static void menu_event_handler(lv_obj_t *obj, lv_event_t event) {
         confirmReset();
         break;
       case (5):
-        Serial.println("Restore from seed");
-        restoreFromSeed();
+        Serial.println("** unused **");
         break;
       case (6):
         Serial.println("Restart");
@@ -570,12 +549,12 @@ static void menu_event_handler(lv_obj_t *obj, lv_event_t event) {
   }
 }
 
-static const char *menu_map[] = { "Display Pubkey", "\n",
+static const char *menu_map[] = { "Receive", "\n",
                                   "Sign Transaction", "\n",
-                                  "Export ZPUB", "\n",
-                                  "Show Seed", "\n",
+                                  "Show ZPUB", "\n",
+                                  "Settings", "\n",
                                   "Wipe Device", "\n",
-                                  "Restore From Seed", "\n",
+                                  "unused", "\n",
                                   "Restart", "" };
 
 //========================================================================
@@ -588,75 +567,6 @@ void menu_matrix(void) {
   lv_obj_set_size(main_menu, 240, 240);
   lv_obj_align(main_menu, NULL, LV_ALIGN_CENTER, 0, 0);
   lv_obj_set_event_cb(main_menu, menu_event_handler);
-}
-
-//========================================================================
-/*void pinmaker() {
-  ttgo->tft->fillScreen(TFT_BLACK);
-  ttgo->tft->setCursor(0, 90);
-  ttgo->tft->setTextColor(TFT_GREEN);
-  ttgo->tft->println("  Enter pin using");
-  ttgo->tft->println("  keypad,");
-  delay(6000);
-  enterpin(true);
-}*/
-
-//========================================================================
-// On each button press, generate the next of 24 seed words.
-// When completed, save to seed file in FFAT and SPIFFS partitions
-//========================================================================
-/*static void seedmaker_cb(lv_obj_t *obj, lv_event_t event) {
-  if (event == LV_EVENT_CLICKED) {
-    if (seedCount <= 23) {
-      seedCount++;
-      seedWord = seedwords[random(0, 2047)];
-      lv_label_set_text(seedLabel, seedWord.c_str());
-      seedgeneratestr += " " + seedWord;
-      Serial.println(seedgeneratestr);
-      wordCount = "Word " + String(seedCount);
-      lv_label_set_text(wordLabel, wordCount.c_str());
-    } else {
-      if (seed_done) {
-        lv_obj_del(seedLabel);
-        lv_obj_del(wordLabel);
-        lv_obj_del(seedBtn);
-        pinmaker();
-      } else {
-        fs::File file = SPIFFS.open("/key.txt", FILE_WRITE);
-        file.print(seedgeneratestr.substring(0, seedgeneratestr.length()) + "\n");
-        file.close();
-
-        file = SPIFFS.open("/bitwatch.txt", FILE_WRITE);
-        file.print(seedgeneratestr);
-        file.close();
-
-        lv_obj_align(seedLabel, NULL, LV_ALIGN_CENTER, -50, -20);
-        lv_label_set_text(seedLabel, "Key file saved to\ninternal storage");
-        lv_label_set_text(wordLabel, "");
-        lv_label_set_text(btnLabel, "Done");
-        seed_done = true;
-      }
-    }
-  }
-}*/
-
-// Prints the content of a file to the Serial
-void printFile(const char *filename) {
-  // Open file for reading
-  File file = FlashFS.open(filename);
-  if (!file) {
-    Serial.println(F("Failed to read file"));
-    return;
-  }
-
-  // Extract each characters by one by one
-  while (file.available()) {
-    Serial.print((char)file.read());
-  }
-  Serial.println();
-
-  // Close the file
-  file.close();
 }
 
 //========================================================================
@@ -740,28 +650,8 @@ void getKeys(String mnemonic, String password) {
 
 //========================================================================
 static void confirmPin() {
-  /*bool set = setPin;
-  if (set == true) {
-    uint8_t newpasskeyresult[32];
-    sha256(passkey, newpasskeyresult);
-    hashed = toHex(newpasskeyresult, 32);
 
-    fs::File file = SPIFFS.open("/pass.txt", FILE_WRITE);
-    file.print(hashed + "\n");
-    file.close();
-  }
-
-  fs::File otherfile = SPIFFS.open("/pass.txt");
-  savedpinhash = otherfile.readStringUntil('\n');
-  otherfile.close();
-
-  uint8_t passkeyresult[32];
-  sha256(passkey, passkeyresult);
-  hashed = toHex(passkeyresult, 32);
-  Serial.println(savedpinhash);
-  Serial.println(hashed);*/
-
-  if (/*savedpinhash == hashed || set == true*/ pincode == pin) {
+  if (pincode == pin) {
     Serial.println("PIN ok");
     getKeys(seedphrase, pin);
     ttgo->tft->fillScreen(TFT_BLACK);
@@ -769,14 +659,13 @@ static void confirmPin() {
     ttgo->tft->setTextSize(2);
     ttgo->tft->setTextColor(TFT_GREEN);
     ttgo->tft->print(" Wallet Loaded!");
-    //startWebserver();
     delay(1000);
     lv_obj_del(pinPad);
     lv_obj_del(pinTitle);
     lv_obj_del(label1);
     menu_matrix();
     return;
-  } else /*if (savedpinhash != hashed && set == false)*/ {
+  } else {
     ttgo->tft->fillScreen(TFT_BLACK);
     ttgo->tft->setCursor(0, 110);
     ttgo->tft->setTextSize(2);
@@ -1013,37 +902,6 @@ void startupWallet() {
   } else {
     enterpin();
   }
-
-  /*bool haveKey = true;
-  bool haveCommand = true;*/
-
-  //Checks if the user has an account or is forcing a reset
-  /*haveKey = SPIFFS.exists("/key.txt");
-  if (haveKey) {
-    Serial.println("Key file exists:");
-    fs::File keyfile = SPIFFS.open("/key.txt", FILE_READ);
-    savedseed = keyfile.readStringUntil('\n');
-    Serial.println(savedseed);
-    keyfile.close();
-  }
-
-  // Extract any command we have been given in the command file
-  haveCommand = SPIFFS.exists("/bitwatch.txt");
-  if (haveCommand) {
-    fs::File commandfile = SPIFFS.open("/bitwatch.txt", FILE_READ);
-    sdcommand = commandfile.readStringUntil('\n');
-    Serial.println(sdcommand);
-    commandfile.close();
-  }
-
-  if (sdcommand == "HARD RESET") {
-    seedmaker();
-  } else if (sdcommand.substring(0, 7) == "RESTORE") {
-    restoreFromSeed();
-    enterpin(true);
-  } else {
-    enterpin(false);
-  }*/
 }
 
 
@@ -1162,39 +1020,7 @@ void loop() {
     loopWatch();
 
   } else {
-    /*WiFiClient client = server.available();  // listen for incoming clients
-
-    if (client) {                     // if you get a client,
-      Serial.println("New Client.");  // print a message out the serial port
-      String currentLine = "";        // make a String to hold incoming data from the client
-      while (client.connected()) {    // loop while the client's connected
-        if (client.available()) {     // if there's bytes to read from the client,
-          char c = client.read();     // read a byte, then
-          Serial.write(c);            // print it out the serial monitor
-          if (c == '\n') {            // if the byte is a newline character
-
-            // if the current line is blank, you got two newline characters in a row.
-            // that's the end of the client HTTP request, so send a response:
-            if (currentLine.length() == 0) {
-              // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-              // and a content-type so the client knows what's coming, then a blank line:
-              client.println("HTTP/1.1 200 OK");
-              client.println("Content-type:text/html");
-              client.println();
-              // print content of bitwatch.txt
-              fs::File file = SPIFFS.open("/bitwatch.txt", FILE_READ);
-              String bitwatch = file.readStringUntil('\n');
-              client.println(bitwatch);
-              file.close();
-              client.stop();
-            }
-          }
-        }
-      }
-      // close the connection:
-      Serial.println("Client Disconnected.");
-    }*/
-  portal.handleClient();
+    portal.handleClient();
     lv_task_handler();
     delay(5);
   }
