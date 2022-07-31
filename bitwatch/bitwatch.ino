@@ -427,7 +427,7 @@ void signTransaction() {
           //printFile(PSBT_FILE);
           const JsonObject psbtRoot = doc[0];
           // TODO use max size of PSBT
-          char psbtChar[64];
+          char psbtChar[1024];
           strlcpy(psbtChar, psbtRoot["value"], sizeof(psbtChar));
           psbt = String(psbtChar);
           Serial.println("Read psbt = " + psbt);
