@@ -166,6 +166,7 @@ static const char PAGE_SAVEWALLET[] PROGMEM = R"(
 )";
 
 static const char PAGE_ENTERPSBT[] PROGMEM = R"(
+{
   "uri": "/enterpsbt",
   "title": "Submit PSBT",
   "menu": true,
@@ -181,12 +182,13 @@ static const char PAGE_ENTERPSBT[] PROGMEM = R"(
       "type": "ACInput",
       "label": "Paste PSBT here"
     }
-)";
+  ]
+})";
 
 static const char PAGE_SAVEPSBT[] PROGMEM = R"(
 {
   "uri": "/savepsbt",
-  "title": "PSBT",
+  "title": "Elements",
   "menu": false,
   "element": [
     {
@@ -209,11 +211,10 @@ static const char PAGE_SAVEPSBT[] PROGMEM = R"(
       "name": "ok",
       "type": "ACSubmit",
       "value": "OK",
-      "uri": "/signedpsbt"
+      "uri": "/enterpsbt"
     }
   ]
-}
-)";
+})";
 
 /*static const char PAGE_SIGNEDTX[] PROGMEM = R"(
 )";*/
@@ -397,13 +398,13 @@ void signTransaction() {
       return String();
     });
 
-    String signedTransactionPage = "{\"title\": \"Signed Transaction\",\"uri\": \"/signedpsbt\",\"menu\": true,\"element\": [{\"name\": \"transaction\",\"type\": \"ACText\", \"value\": \"" + signedTransaction + "\"}]}";
-    signedtxAux.load(FPSTR(signedTransactionPage.c_str()));
-    savepsbtAux.on([](AutoConnectAux &aux, PageArgument &arg) {
+    //String signedTransactionPage = "{\"title\": \"Signed Transaction\",\"uri\": \"/signedpsbt\",\"menu\": true,\"element\": [{\"name\": \"transaction\",\"type\": \"ACText\", \"value\": \"" + signedTransaction + "\"}]}";
+    //signedtxAux.load(FPSTR(signedTransactionPage.c_str()));
+    /*savepsbtAux.on([](AutoConnectAux &aux, PageArgument &arg) {
       aux["caption"].value = "Signed Transaction";
 
       return String();
-    });
+    });*/
     
 
     savepsbtAux.load(FPSTR(PAGE_SAVEPSBT));
@@ -424,7 +425,7 @@ void signTransaction() {
         {
           Serial.println("Error decoding psbt file!");
         } else {
-          //printFile(PSBT_FILE);
+          printFile(PSBT_FILE);
           const JsonObject psbtRoot = doc[0];
           // TODO use max size of PSBT
           char psbtChar[1024];
@@ -434,14 +435,12 @@ void signTransaction() {
           signedTransaction = signTransaction(psbt);
 
           // read the saved elements again to display.
-          file = FlashFS.open(PSBT_FILE, "r");
-          aux["echo"].value = file.readString();
+          //file = FlashFS.open(PSBT_FILE, "r");
+          aux["echo"].value = signedTransaction; //file.readString();
           file.close();
-          printFile(PSBT_FILE);
+          //printFile(PSBT_FILE);
         }
-      }
-      else
-      {
+      } else {
         aux["echo"].value = "Filesystem failed to open.";
       }
 
@@ -458,7 +457,7 @@ void signTransaction() {
     config.menuItems = AC_MENUITEM_CONFIGNEW | AC_MENUITEM_OPENSSIDS | AC_MENUITEM_RESET;
     config.title = "Bitwatch";
 
-    portal.join({submittxAux, signedtxAux, savepsbtAux});
+    portal.join({submittxAux, savepsbtAux});
     portal.config(config);
     portal.begin();
     while (true)
@@ -777,7 +776,7 @@ void startConfigPortal()
 
     String zpubPage = "{\"title\": \"ZPUB\",\"uri\": \"/zpub\",\"menu\": true,\"element\": [{\"name\": \"zpub\",\"type\": \"ACText\", \"value\": \"" + pubkey + "\"}]}";
     zpubAux.load(FPSTR(zpubPage.c_str()));
-    saveWalletAux.on([](AutoConnectAux &aux, PageArgument &arg) {
+    zpubAux.on([](AutoConnectAux &aux, PageArgument &arg) {
       aux["caption"].value = "ZPUB";
 
       return String();
