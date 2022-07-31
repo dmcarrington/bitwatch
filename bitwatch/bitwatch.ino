@@ -181,6 +181,17 @@ static const char PAGE_ENTERPSBT[] PROGMEM = R"(
       "name": "psbt",
       "type": "ACInput",
       "label": "Paste PSBT here"
+    },
+    {
+      "name": "save",
+      "type": "ACSubmit",
+      "value": "Save",
+      "uri": "/savepsbt"
+    },
+    {
+      "name": "adjust_width",
+      "type": "ACElement",
+      "value": "<script type='text/javascript'>window.onload=function(){var t=document.querySelectorAll('input[]');for(i=0;i<t.length;i++){var e=t[i].getAttribute('placeholder');e&&t[i].setAttribute('size',e.length*.8)}};</script>"
     }
   ]
 })";
@@ -188,7 +199,7 @@ static const char PAGE_ENTERPSBT[] PROGMEM = R"(
 static const char PAGE_SAVEPSBT[] PROGMEM = R"(
 {
   "uri": "/savepsbt",
-  "title": "Elements",
+  "title": "PSBT",
   "menu": false,
   "element": [
     {
@@ -223,13 +234,13 @@ static const char PAGE_SAVEPSBT[] PROGMEM = R"(
 WebServerClass server;
 AutoConnect portal(server);
 AutoConnectConfig config;
-AutoConnectAux restoreAux;
+//AutoConnectAux restoreAux;
 AutoConnectAux initAux;
 AutoConnectAux zpubAux;
 AutoConnectAux saveWalletAux;
-AutoConnectAux viewWalletAux;
+//AutoConnectAux viewWalletAux;
 AutoConnectAux submittxAux;
-AutoConnectAux signedtxAux;
+//AutoConnectAux signedtxAux;
 AutoConnectAux savepsbtAux;
 
 // Prints the content of a file to the Serial
@@ -369,7 +380,7 @@ String signTransaction(String psbt) {
 //========================================================================
 void signTransaction() {
   server.on("/", []() {
-      String content = "<h1>Bitwatch</br>Stealth Bitcoin hardware wallet</h1>";
+      String content = "<h1>Bitwatch</br>PSBT Signing Portal</h1>";
       content += AUTOCONNECT_LINK(COG_24);
       server.send(200, "text/html", content);
     });
@@ -410,14 +421,18 @@ void signTransaction() {
     savepsbtAux.load(FPSTR(PAGE_SAVEPSBT));
     savepsbtAux.on([](AutoConnectAux &aux, PageArgument &arg) {
       aux["caption"].value = PSBT_FILE;
-      File file = FlashFS.open(PSBT_FILE, "w");
+      File file = FlashFS.open(PSBT_FILE, "w+");
 
       if (file)
       {
         // save as a loadable set for parameters.
         submittxAux.saveElement(file, {"psbt"});
-        //file.close();
+        file.close();
+      }
 
+      file = FlashFS.open(PSBT_FILE, "r");
+      if(file)
+      {
         // read value back from file and actually sign the transaction
         StaticJsonDocument<PARAM_JSON_SIZE> doc;
         DeserializationError error = deserializeJson(doc, file.readString());
@@ -426,13 +441,14 @@ void signTransaction() {
           Serial.println("Error decoding psbt file!");
         } else {
           printFile(PSBT_FILE);
-          const JsonObject psbtRoot = doc[0];
+          //const JsonObject psbtRoot = doc["value"];
           // TODO use max size of PSBT
-          char psbtChar[1024];
-          strlcpy(psbtChar, psbtRoot["value"], sizeof(psbtChar));
+          const char * psbtChar = doc["value"];
+          //strlcpy(psbtChar, psbtRoot, sizeof(psbtChar));
           psbt = String(psbtChar);
           Serial.println("Read psbt = " + psbt);
           signedTransaction = signTransaction(psbt);
+          Serial.println("Signed transaction: " + signedTransaction);
 
           // read the saved elements again to display.
           //file = FlashFS.open(PSBT_FILE, "r");
@@ -441,6 +457,7 @@ void signTransaction() {
           //printFile(PSBT_FILE);
         }
       } else {
+        Serial.println("failed to open PSBT_FILE for writing");
         aux["echo"].value = "Filesystem failed to open.";
       }
 
