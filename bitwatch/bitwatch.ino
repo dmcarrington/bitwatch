@@ -68,18 +68,10 @@ String pincode = "";
 String obfuscated = "";
 lv_obj_t *label1 = NULL;
 
-// Transaction signing
-lv_obj_t *txinfo = NULL;
-lv_obj_t *signTxBtns = NULL;
-
-
 // Wallet reset UI
 lv_obj_t *resetBtns = NULL;
 lv_obj_t *resetInfo = NULL;
 lv_obj_t *main_menu = NULL;
-
-
-
 
 // custom access point pages
 // Init / Restore wallet
@@ -180,7 +172,7 @@ static const char PAGE_ENTERPSBT[] PROGMEM = R"(
     {
       "name": "psbt",
       "type": "ACInput",
-      "label": "Paste PSBT here"
+      "label": "Paste PSBT here - hex only"
     },
     {
       "name": "save",
@@ -227,20 +219,14 @@ static const char PAGE_SAVEPSBT[] PROGMEM = R"(
   ]
 })";
 
-/*static const char PAGE_SIGNEDTX[] PROGMEM = R"(
-)";*/
-
 // portal and config
 WebServerClass server;
 AutoConnect portal(server);
 AutoConnectConfig config;
-//AutoConnectAux restoreAux;
 AutoConnectAux initAux;
 AutoConnectAux zpubAux;
 AutoConnectAux saveWalletAux;
-//AutoConnectAux viewWalletAux;
 AutoConnectAux submittxAux;
-//AutoConnectAux signedtxAux;
 AutoConnectAux savepsbtAux;
 
 // Prints the content of a file to the Serial
@@ -300,7 +286,7 @@ void showAddress(String XXX) {
 }
 
 //========================================================================
-// Show ZPUB as QR code and export to SPIFFS
+// Show ZPUB as QR code
 //========================================================================
 void exportZpub() {
   int str_len = pubkey.length() + 1;
@@ -407,16 +393,7 @@ void signTransaction() {
       }
 
       return String();
-    });
-
-    //String signedTransactionPage = "{\"title\": \"Signed Transaction\",\"uri\": \"/signedpsbt\",\"menu\": true,\"element\": [{\"name\": \"transaction\",\"type\": \"ACText\", \"value\": \"" + signedTransaction + "\"}]}";
-    //signedtxAux.load(FPSTR(signedTransactionPage.c_str()));
-    /*savepsbtAux.on([](AutoConnectAux &aux, PageArgument &arg) {
-      aux["caption"].value = "Signed Transaction";
-
-      return String();
-    });*/
-    
+    });    
 
     savepsbtAux.load(FPSTR(PAGE_SAVEPSBT));
     savepsbtAux.on([](AutoConnectAux &aux, PageArgument &arg) {
@@ -440,21 +417,14 @@ void signTransaction() {
         {
           Serial.println("Error decoding psbt file!");
         } else {
-          printFile(PSBT_FILE);
-          //const JsonObject psbtRoot = doc["value"];
-          // TODO use max size of PSBT
           const char * psbtChar = doc["value"];
-          //strlcpy(psbtChar, psbtRoot, sizeof(psbtChar));
           psbt = String(psbtChar);
           Serial.println("Read psbt = " + psbt);
           signedTransaction = signTransaction(psbt);
           Serial.println("Signed transaction: " + signedTransaction);
 
-          // read the saved elements again to display.
-          //file = FlashFS.open(PSBT_FILE, "r");
-          aux["echo"].value = signedTransaction; //file.readString();
+          aux["echo"].value = signedTransaction;
           file.close();
-          //printFile(PSBT_FILE);
         }
       } else {
         Serial.println("failed to open PSBT_FILE for writing");
@@ -793,7 +763,7 @@ void startConfigPortal()
 
     String zpubPage = "{\"title\": \"ZPUB\",\"uri\": \"/zpub\",\"menu\": true,\"element\": [{\"name\": \"zpub\",\"type\": \"ACText\", \"value\": \"" + pubkey + "\"}]}";
     zpubAux.load(FPSTR(zpubPage.c_str()));
-    zpubAux.on([](AutoConnectAux &aux, PageArgument &arg) {
+    saveWalletAux.on([](AutoConnectAux &aux, PageArgument &arg) {
       aux["caption"].value = "ZPUB";
 
       return String();
