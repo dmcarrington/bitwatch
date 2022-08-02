@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2020 David Carrington
+   Copyright (c) 2020-2022 David Carrington
 
    Port of Bowser wallet https://github.com/arcbtc/bowser-bitcoin-hardware-wallet to LILYGO T-Watch
 
@@ -177,7 +177,7 @@ static const char PAGE_ENTERPSBT[] PROGMEM = R"(
     {
       "name": "save",
       "type": "ACSubmit",
-      "value": "Save",
+      "value": "Sign",
       "uri": "/savepsbt"
     },
     {
@@ -693,9 +693,10 @@ static void pin_event_handler(lv_obj_t *obj, lv_event_t event) {
 static const char *btnm_map[] = { "1", "2", "3", "4", "5", "\n",
                                   "6", "7", "8", "9", "0", "\n",
                                   "Clear", "OK", "" };
-
 //========================================================================
-void passcode_matrix(void) {
+// Display PIN entry pad
+//========================================================================
+void enterpin() {
   ttgo->tft->fillScreen(TFT_BLACK);
   pinPad = lv_btnmatrix_create(lv_scr_act(), NULL);
   lv_btnmatrix_set_map(pinPad, btnm_map);
@@ -711,10 +712,8 @@ void passcode_matrix(void) {
 }
 
 //========================================================================
-void enterpin() {
-  passcode_matrix();
-}
-
+// Display "AP Launched" message while AP is active
+//========================================================================
 void portalLaunch()
 {
   ttgo->tft->fillScreen(TFT_BLACK);
@@ -728,6 +727,9 @@ void portalLaunch()
   ttgo->tft->println(" WHEN FINISHED RESET");
 }
 
+//========================================================================
+// Start AP for configuring wallet
+//========================================================================
 void startConfigPortal()
 {
   // handle access point traffic
@@ -815,7 +817,8 @@ void startConfigPortal()
 }
 
 //=======================================================================
-
+// Try to start the wallet. If one is not found, create a new one and start the config portal
+//========================================================================
 void startupWallet() {
   //FlashFS.begin(FORMAT_ON_FAIL);
   if(!SPIFFS.begin(true)) {
@@ -1006,7 +1009,7 @@ void loop() {
     loopWatch();
 
   } else {
-    portal.handleClient();
+    //portal.handleClient();
     lv_task_handler();
     delay(5);
   }
