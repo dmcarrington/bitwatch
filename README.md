@@ -45,7 +45,7 @@ Displays the current receive address as a QR code on screen for making payments 
 ### Sign Transaction
 Signs an unsigned transaction exported as hex from Electrum wallet. To load the transaction, generate the transaction in Electrum, then export it as hex. Note - I had to use Electrum 3.3.8 to get hex output, more recent versions seem to have stopped exporting in hex format.
 Once you have the hex of the transaction, tap the `Sign Transaction` button of the watch, which will launch the AP on the watch. Connect to this, and you will see a text box to paste the PSBT. Paste the hex here and click `save`, and the watch will sign the transaction and display the result. 
-<img src="https://user-images.githubusercontent.com/32391650/182398208-044d2eff-789e-4e32-95cb-68163c4f5a6c.png"/>
+<img src="https://user-images.githubusercontent.com/32391650/182398206-bf8cf7d0-b2b9-4845-a8bd-6426b3a16366.png"/>
 <img src="https://user-images.githubusercontent.com/32391650/182398208-044d2eff-789e-4e32-95cb-68163c4f5a6c.png"/>
 Copy the signed transaction, reconnect to your regular wifi, and paste the signed transaction hex into a Bitcoin transaction broadcast website, e.g. https://blockstream.info/tx/push, or for something more private RoninDojo has a nice one, alternatively <a href="http://explorerzydxu5ecjrkwceayqybizmpjjznk5izmitf2modhcusuqlid.onion/tx/push">Blockstream's tor page</a> .
 
