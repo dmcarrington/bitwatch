@@ -21,9 +21,9 @@ Fire up an Electrum watch-only wallet with this zpub (preferably on the device w
 
 <a href="https://odysee.com/@davidcarrington:3/bitwatch-introduction:c" target="_blank"><img src="https://user-images.githubusercontent.com/32391650/177209415-e0f21b06-1e7b-4d71-94c7-2392d891b7b4.png"></a>
 
-##Setup Instructions 
+## Setup Instructions 
 
-###First steps
+### First steps
 Install Electrum v3.3.8 (preferably on the device where the Access Point will be located).
 The T-Watch uses the standard ESP32 board. To be able to run the Arduino IDE, which we will need to write data to your watch, you will need the lastes python version https://www.python.org/downloads/release/python-3105/. After this we can happily install the latest Arduino IDE https://www.arduino.cc/en/software.
 Within the Arduino IDE select Arduino->Preferences from the menu and in the "additional sources" text field enter the URL https://dl.espressif.com/dl/package_esp32_index.json. To finally include it in your project go to Tools->Board->Boards Manager, search for „esp32“ and install the latest version. 
