@@ -12,7 +12,7 @@ This project is work-in-progress! While I make every effory to make the wallet a
 The LILYGO T-watch is a simple ESP32 based smartwatch that can be programmed like any other ESP32 board and, due to its appearance, makes an excellent candidate for a 'stealth' Bitcoin hardware wallet that can easily be disguised as a conventional cheap smartwatch. 
 The hardware is very basic with no camera, mic, USB storage or microSD card slot. To get around this, we make use of a Wireless Access Point Autoconnect feature to input data through a second device where needed and present QR codes on the watch where ever possible. 
 
-##Features & UX
+## Features & UX
 
 1. Export zpub in the wallet menue brings up the public master key for the wallet as a QR readable by mobile apps like e.g. Sentinel. 
 Fire up an Electrum watch-only wallet with this zpub (preferably on the device where the AP is located) https://bitcointalk.org/index.php?topic=4573616.0 
