@@ -9,37 +9,58 @@ This project is work-in-progress! While I make every effory to make the wallet a
 ### Note - Version 0.2 makes use of WIFI autoconnect portals to apply settings and transactions. This removes the need to set up fancy partitioning schemes and use scripts to send transactions to and from the watch.
 
 ## Introduction
-The LilyGo TTwatch is a simple ESP32 based smartwatch that can be programmed like any other ESP32 board, and due to its appearance, I thought it would make an excellent candidate for a 'stealth' Bitcoin hardware wallet that can easily be disguised as a conventional cheap smartwatch. The hardware is very basic, with no camera, mic, USB storage or microSD card slot. To get arounf this, we use Wireless Access Point Autoconnect windows to input data to the device, and QR codes on the watch itself where possible. The end-to-end usage can work like this:
+The LILYGO T-watch is a simple ESP32 based smartwatch that can be programmed like any other ESP32 board and, due to its appearance, makes an excellent candidate for a 'stealth' Bitcoin hardware wallet that can easily be disguised as a conventional cheap smartwatch. 
+The hardware is very basic with no camera, mic, USB storage or microSD card slot. To get around this, we make use of a Wireless Access Point Autoconnect feature to input data through a second device where needed and present QR codes on the watch where ever possible. 
 
-1. Turn device on for the first time. If there is no wallet present, it will enter configuration mode, starting a wireless acess point. From here you can set a PIN code, record your seed phrase, or restore a wallet from a seed phrase.
-2. From the menu in the wallet mode, export the wallet zpub (public master key for the wallet). This can be accessed in two ways:
-    a. Select "Show ZPUB" from the wallet menu, which shows the ZPUB as a QR code for reading by a mobile app e.g. sentinel.
-    b. Select "Settings" from the wallet menu, then connect to the wireless access point on the device with Electrum on. Click the "ZPUB" menu item at the top right of the autoconnect window, and copy the text string beginning "zpub..."
-3. Fire up Electrum, and set up a watch-only wallet using the zpub - instructions for how to do this are here if you need it: https://bitcointalk.org/index.php?topic=4573616.0
-4. Send some sats to your wallet - either using Electrum or by displaying the receive address as a QR code on the watch
-5. Now when we want to send some sats, we create a partially-signed transaction (PSBT) using Electrum, which we need to send to the watch for signing. Copy the hex of the PSBT, then tap the "Sign Transaction" button on the watch menu. Connect your device to the Wireless AP, and paste the transaction hex into the text field.
-6. Click "Save" to sign the transaction. If successful, the signed transaction will be displayed on the access point page. You can now take the transaction and broadcast it through a tool of your choice.
+##Features & UX
+
+1. Export zpub in the wallet menue brings up the public master key for the wallet as a QR readable by mobile apps like e.g. Sentinel. 
+Fire up an Electrum watch-only wallet with this zpub (preferably on the device where the AP is located) https://bitcointalk.org/index.php?topic=4573616.0 
+2. Send some sats to your wallet by either using Electrum OR by displaying the receive address as a QR code on the watch 
+3. To send sats we create a PSBT using Electrum and send it to the watch to get signed, saved and broadcasted through the auto-connect window.
 
 <a href="https://odysee.com/@davidcarrington:3/bitwatch-introduction:c" target="_blank"><img src="https://user-images.githubusercontent.com/32391650/177209415-e0f21b06-1e7b-4d71-94c7-2392d891b7b4.png"></a>
 
+##Setup Instructions 
+
+###First steps
+Install Electrum v3.3.8 (preferably on the device where the Access Point will be located).
+The T-Watch uses the standard ESP32 board. To be able to run the Arduino IDE, which we will need to write data to your watch, you will need the lastes python version https://www.python.org/downloads/release/python-3105/. After this we can happily install the latest Arduino IDE https://www.arduino.cc/en/software.
+Within the Arduino IDE select Arduino->Preferences from the menu and in the "additional sources" text field enter the URL https://dl.espressif.com/dl/package_esp32_index.json. To finally include it in your project go to Tools->Board->Boards Manager, search for „esp32“ and install the latest version. 
+
 ## Boards and Libraries
-The T-Watch uses the standard ESP32 board. If you don't already have the ESP32 board installed, go to `File`, select `Preferences` and under the "additional sources" text box, enter this URL: `https://dl.espressif.com/dl/package_esp32_index.json`. Then go into Tools->Board->Boards Manager. Search for esp32 and install the latest version. Then go to Tools->Boards, then under Boards, scroll down until you get to `TTGO T-watch`.
-To load the library, go to the GitHub site, download the repository in zip format, and then import it into Arduino using the Library import ZIP function.
-`https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library`.
-Other required libraries are provided in the `libraries` folder of the repo, copy these into your local Adruino libraries folder.
+Download the library from GitHub in zip format and then import it into Arduino using Sketch->Insert libraries https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library. Include it by going ahead with Tools->Boards->TTGO T-watch. 
+We will on top need the uBitcoin library https://github.com/micro-bitcoin/uBitcoin which is inserted and included in the same way .
+Copy all files into your local Documents/Arduino/libraries folder like shown below 
+![bitwatch](https://user-images.githubusercontent.com/63317640/183272149-0b45f2ab-fb64-4b77-b722-24a3300c9da6.jpg)
 
-## Accessing the wallet
-On startup, the watch will display a black screen for 5 seconds. During this period, press the power button 3 times to access the wallet. If not pressed, the watch will continue to boot into a standard watch mode.
+Next we will need to open a CLI (like Terminal on MacOS) and open Arduino IDE by navigating to the directory and write the command „open Arduino“. This is to prevent us from unmotivating python errors later.
 
-## Initialization
-On first use, there will no no wallet present on the device. When first started in wallet mode, a new wallet will be created, and the watch will enter AP mode. The access point will be called `Bitwatch-<mac_address>`, and the default password is `ToTheMoon1`. The default is set in the code and be configured via the config AP. Please note, given the limited hardware capabilities of the watch, connecting can take some time, and the autoconnect page can take a while to load. Be patient!
+We will now start to do get the watch magic running by open the ./libraries/bitwatch-master/bitwatch/bitwatch.ino sketch with Arduino IDE. On the top left of the sketch-window you will find a button for Test and one for upload. 
+![bitwatcharduino](https://user-images.githubusercontent.com/63317640/183271911-078868b6-11db-4acf-953c-4139a01c507a.jpg)
+Attach the watch to your device and press the left <test> button. 
+If all is fine press <upload> 
+
+    You´re done 🎉 
+    
+
+## Accessing the wallet for the first time
+On startup, the watch will display a black screen for 5 seconds. During this period, press the power button 3 times to access the wallet. If not pressed, press the power button 3 times to access the wallet mode. If not pressed, the watch will continue to boot into a standard watch mode and remain invisible on the main screen.
+On first use there will be no wallet present on the device which leads to a newly created wallet and the watch to enter AP mode. The access point will be called Bitwatch-<mac_address> and the default password to log into it from a second device (preferably the one where Electrum is installed as well) is ToTheMoon1. 
+![bitwatchAP](https://user-images.githubusercontent.com/63317640/183272001-795950c3-c5f1-40e8-9737-9da1135b5143.jpg)
+
+This default PIN and PWD are set in the code and should be changed through the autoconnect window soon. 
+Please note, given the limited hardware capabilities of the watch, connecting will take a few seconds more than you are used to and the auto-connect page might sometimes. 
+
 <img src="https://user-images.githubusercontent.com/32391650/182398204-efba176f-8211-4f0a-a328-3dac35febf44.png"/>
-Note down the 24-word seed phrase as you would for any other wallet, and set the PIN to a memorable number. Restart the watch once you have finished. You should now be prompted to enter the PIN, after which you will see the main wallet menu on the watch.
+Note down the 24-word seed phrase as you would for any other wallet, and set the PIN to a memorable number. Restart the watch once you have finished by pressing the side button of the watch 3 times on startup. 
+You should now be prompted to enter the PIN after which you will see the main wallet menu on the watch.
 
 ## Wallet Menu
 
-After creating and accessing the wallet, the following menu options are available:
-### Display Receive Address
+Let´s dive into the menu of your new hardware-wallet.
+
+### Receive
 Displays the current receive address as a QR code on screen for making payments to the wallet.
 
 ### Sign Transaction
