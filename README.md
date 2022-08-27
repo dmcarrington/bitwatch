@@ -24,9 +24,9 @@ Fire up an Electrum watch-only wallet with this zpub (preferably on the device w
 ## Setup Instructions 
 
 ### First steps
-Install Electrum v3.3.8 (preferably on the device where the Access Point will be located).
+Install Electrum v3.3.8 (preferably on the device from where the Access Point will be accessed).
 
-The T-Watch uses the standard ESP32 board. To be able to run the Arduino IDE, which we will need to write data to your watch, you will need the lastes python version https://www.python.org/downloads/release/python-3105/. 
+The T-Watch uses the standard ESP32 board. To be able to run the Arduino IDE, which we will need to write data to your watch, you will need the lastest python version https://www.python.org/downloads/release/python-3105/. 
 
 After this we can happily install the latest Arduino IDE https://www.arduino.cc/en/software.
 Within the Arduino IDE select `Arduino->Preferences` from the menu and in the `additional sources` text field enter the URL "https://dl.espressif.com/dl/package_esp32_index.json". To finally include it in your project go to `Tools->Board->Boards Manager`, search for "esp32" and install the latest version. 
@@ -46,8 +46,8 @@ On the top left of the sketch-window you will find a button for "Test" and one f
 
 ![bitwatcharduino](https://user-images.githubusercontent.com/63317640/183271911-078868b6-11db-4acf-953c-4139a01c507a.jpg)
 
-Attach the watch to your device and press the left `TEST` button. 
-If all is fine press `UPLOAD`.
+Attach the watch to your device and press the left `Verify` button Arduino IDE to build the code. 
+If all is fine press `UPLOAD`. Assuming the code is successfully loaded to the watch, it will restart and by default will start in its decoy watch mode unless you enter the secret code (more on this below).
 
 You´re done 🎉 Good job!
     
