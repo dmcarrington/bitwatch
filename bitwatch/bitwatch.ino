@@ -524,9 +524,6 @@ static void menu_event_handler(lv_obj_t *obj, lv_event_t event) {
         Serial.println("Wipe Device");
         confirmReset();
         break;
-      case (5):
-        Serial.println("** unused **");
-        break;
       case (6):
         Serial.println("Restart");
         esp_restart();
@@ -540,7 +537,6 @@ static const char *menu_map[] = { "Receive", "\n",
                                   "Show ZPUB", "\n",
                                   "Settings", "\n",
                                   "Wipe Device", "\n",
-                                  "unused", "\n",
                                   "Restart", "" };
 
 //========================================================================
