@@ -96,12 +96,13 @@ static const char PAGE_INIT[] PROGMEM = R"(
     {
       "name": "password",
       "type": "ACInput",
-      "label": "Password for Bitwatch AP WiFi"
+      "label": "Password for Bitwatch AP WiFi",
+      "apply": "password"
     },
     {
       "name": "seedphrase",
       "type": "ACInput",
-      "label": "Wallet Seed Phrase"
+      "label": "Wallet Seed Phrase",
     },
     {
       "name": "load",
@@ -172,7 +173,7 @@ static const char PAGE_ENTERPSBT[] PROGMEM = R"(
     {
       "name": "psbt",
       "type": "ACInput",
-      "label": "Paste PSBT here - hex only"
+      "label": "Paste PSBT here - hex only",
     },
     {
       "name": "save",
@@ -581,7 +582,7 @@ void seedmaker() {
   doc[0]["value"] = "1234";
   doc[0]["label"] = "PIN code for Bitwatch wallet";
   doc[0]["pattern"] = "";
-  doc[0]["placeholder"] = "";
+  doc[0]["placeholder"] = "1234";
   doc[0]["style"] = "";
   doc[0]["apply"] = "number";
 
@@ -590,16 +591,16 @@ void seedmaker() {
   doc[1]["value"] = "ToTheMoon1";
   doc[1]["label"] = "Password for Bitwatch AP WiFi";
   doc[1]["pattern"] = "";
-  doc[1]["placeholder"] = "";
+  doc[1]["placeholder"] = "WIFI password";
   doc[1]["style"] = "";
-  doc[1]["apply"] = "text";
+  doc[1]["apply"] = "password";
   
   doc[2]["name"] = "seedphrase";
   doc[2]["type"] = "ACInput";
   doc[2]["value"] = seedphrase;
   doc[2]["label"] = "Wallet Seed Phrase";
   doc[2]["pattern"] = "";
-  doc[2]["placeholder"] = "";
+  doc[2]["placeholder"] = "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12";
   doc[2]["style"] = "";
   doc[2]["apply"] = "text";
   
@@ -759,7 +760,7 @@ void startConfigPortal()
       return String();
     });
 
-    String zpubPage = "{\"title\": \"ZPUB\",\"uri\": \"/zpub\",\"menu\": true,\"element\": [{\"name\": \"zpub\",\"type\": \"ACText\", \"value\": \"" + pubkey + "\"}]}";
+    String zpubPage = "{\"title\": \"ZPUB\",\"uri\": \"/zpub\",\"menu\": true,\"element\": [{\"name\": \"zpub\",\"type\": \"ACText\", \"value\": \"" + pubkey + "\", \"style\": \"display:inline;word-wrap:break-word;font-weight:bold;margin-right:3px\"}]}";
     zpubAux.load(FPSTR(zpubPage.c_str()));
     saveWalletAux.on([](AutoConnectAux &aux, PageArgument &arg) {
       aux["caption"].value = "ZPUB";
