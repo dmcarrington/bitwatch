@@ -25,6 +25,8 @@ The hardware is very basic with no camera, mic, USB storage or microSD card slot
 
 ## Setup Instructions
 
+### Installation using browser: https://dmcarrington.github.io/bitwatch/installer/
+
 ### First steps
 
 Install Electrum v3.3.8 (preferably on the device from where the Access Point will be accessed).
