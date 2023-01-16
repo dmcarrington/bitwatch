@@ -8,7 +8,7 @@
       "chipFamily": "ESP32",
       "parts": [
         {
-          "path": "bootloader.bin",
+          "path": "bootloader_dio_80m.bin",
           "offset": 4096
         },
         {
