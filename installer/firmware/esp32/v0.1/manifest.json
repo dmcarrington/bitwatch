@@ -1,0 +1,29 @@
+{
+  "name": "Bitwatch",
+  "version": "0.1",
+  "funding_url": "https://github.com/dmcarrington/bitwatch",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        {
+          "path": "bootloader.bin",
+          "offset": 4096
+        },
+        {
+          "path": "bitwatch.ino.partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "bitwatch.ino.bin",
+          "offset": 65536
+        }
+      ]
+    }
+  ]
+}
